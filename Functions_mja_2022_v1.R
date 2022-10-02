@@ -159,7 +159,7 @@ DiagFunc <-
       unlist() %>%
       sum(.) %>%
       is.na(.)
-    ) == F & unique(data1[[Rep]]) > 1) {
+    ) == F & length(unique(data1[[Rep]])) > 1) {
       Model2 <-
         as.formula(TraitT ~ as.factor(get(Trat)) + as.factor(get(Rep)))
     } else {
@@ -390,7 +390,7 @@ DiagFunc <-
         unlist() %>%
         sum(.) %>%
         is.na(.)
-      ) == F & unique(data1[[Rep]]) > 1) {
+      ) == F & length(unique(data1[[Rep]])) > 1) {
         Model2 <-
           as.formula(TraitT ~ as.factor(get(Trat)) + as.factor(get(Rep)))
       } else {
