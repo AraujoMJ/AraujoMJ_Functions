@@ -1481,6 +1481,10 @@ Thinning_BreedR <- function(BV_Column = "a_total",
                             save_plot_rank = TRUE,
                             IS = NULL,
                             id = "ID",
+                            nGroups3 = "left",
+                            STP = FALSE,
+                            seq_combinations = NULL,
+                            length_seq_combinations = 2,
                             save_table_xlsx = TRUE) {
   # if (exists("nGroups", mode = "any")) {
   #   nGroups = readline(prompt = "Enter with the number of groups for thinning strategies:")
@@ -1541,21 +1545,44 @@ Thinning_BreedR <- function(BV_Column = "a_total",
       size = 1
     )
   # nGroup = 3
-  nGroup3 <-
-    list(
-      geom_vline(
-        xintercept = Fam_Zero,
-        linetype = 4,
-        colour = Col1,
-        size = 1
-      ),
-      geom_vline(
-        xintercept = Inflexi_major,
-        linetype = 4,
-        colour = Col2,
-        size = 1
+  if (!nGroups3 %in% c("left", "right")) {
+    stop("nGroups3 should be: left or right")
+  }
+  
+  if (nGroups3 == "left") {
+    nGroup3 <-
+      list(
+        geom_vline(
+          xintercept = Fam_Zero,
+          linetype = 4,
+          colour = Col1,
+          size = 1
+        ),
+        geom_vline(
+          xintercept = Inflexi_major,
+          linetype = 4,
+          colour = Col2,
+          size = 1
+        )
       )
-    )
+  } else {
+    nGroup3 <-
+      list(
+        geom_vline(
+          xintercept = Fam_Zero,
+          linetype = 4,
+          colour = Col1,
+          size = 1
+        ),
+        geom_vline(
+          xintercept = Inflexi_minor,
+          linetype = 4,
+          colour = Col2,
+          size = 1
+        )
+      )
+  }
+  
   # nGroup = 4
   nGroup4 <-
     list(
@@ -1710,20 +1737,39 @@ Thinning_BreedR <- function(BV_Column = "a_total",
   
   # Map Plot
   Data_Total <- Data_Total |>
-    mutate(Plot = paste0(get(Family_Data_Total), sep = ":", get(Bloc_Column)))
+    mutate(Plot = ifelse(STP == TRUE, get(Bloc_Column), paste0(
+      get(Family_Data_Total), sep = ":", get(Bloc_Column)
+    )))
   
   # Combination for thinning strategies
-  AllComb <- gtools::combinations(
-    n = as.numeric(nGroups) + 1,
-    r = as.numeric(nGroups),
-    v = (as.numeric(nGroups)):0,
-    set = F,
-    repeats.allowed = T
-  )
-  
-  AllComb <- AllComb[-nrow(AllComb), ]
-  colnames(AllComb) <- paste0("G", 1:nGroups)
-  rownames(AllComb) <- seq.int(nrow(AllComb))
+ 
+  if (STP == TRUE) {
+    if (is.null(seq_combinations)) {
+      nRep <- length(unique(Data_Total[[Bloc_Column]]))
+      STP_seq <- seq(1, nRep, length_seq_combinations)
+      
+      AllComb <- gtools::combinations(
+        n = as.numeric(length(STP_seq)) + 1,
+        r = as.numeric(nGroups),
+        v = as.numeric(c(seq(max(STP_seq), 1, -length_seq_combinations),0)),
+        set = F,
+        repeats.allowed = T
+      )
+    } else{
+      AllComb <- gtools::combinations(
+        n = as.numeric(length(seq_combinations)) + 1,
+        r = as.numeric(nGroups),
+        v = as.numeric(c(seq(max(seq_combinations), 1, -1),0)),
+        set = F,
+        repeats.allowed = T
+      )
+    }
+    
+    
+    AllComb <- AllComb[-nrow(AllComb), ]
+    colnames(AllComb) <- paste0("G", 1:nGroups)
+    rownames(AllComb) <- seq.int(nrow(AllComb))
+  }
   
   
   # Mutate Family_Data_Total
