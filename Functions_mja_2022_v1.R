@@ -1,5 +1,4 @@
 
-
 #---------------------------- Function for diagnostic analysis -------------------------------#
 DiagFunc <-
   function(Rep = "REP",
