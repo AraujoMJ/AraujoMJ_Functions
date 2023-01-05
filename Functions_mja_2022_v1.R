@@ -6,6 +6,7 @@ DiagFunc <-
            Trait = NULL,
            Trat = NULL,
            data1 = data,
+           track_feature = "",
            Exp = "Test",
            plot_diag1 = TRUE,
            plot_diag2 = TRUE,
@@ -105,7 +106,7 @@ DiagFunc <-
           BOX[[i]]$x[which(BOX[[i]]$y == max(BOX[[i]]$y))] > lambda.boxcox[2]) {
         cat(paste0(
           "\nTransformation to ",
-          i,
+          i, " - ", Trait, " ", track_feature,
           ": ",
           "lambda = ",
           round(LAMBDA[[i]], 3),
@@ -118,7 +119,7 @@ DiagFunc <-
         
         T_BoxCox <- TRUE
       } else {
-        cat(paste0("\nNo transformation is required for ", i, "\n"))
+        cat(paste0("\nNo transformation is required for ", i," - ", Trait, " ", track_feature, "\n"))
         DATA[[i]]$TraitT <- DATA[[i]][["Trait"]]
         #data1 <- bind_rows(DATA)
         T_BoxCox <- FALSE
@@ -238,7 +239,7 @@ DiagFunc <-
           freq = F
         )
         title(
-          main = paste0("Histogram for ", Trait, " trait:", i, DI1),
+          main = paste0("Histogram for ", Trait, " trait: ", i, " ", track_feature, " ", DI1),
           cex.main = 1,
           sub = SUBt[[i]]
         )
@@ -257,7 +258,7 @@ DiagFunc <-
                xlab = "",
                ylab = "")
         title(
-          main = paste("Normality Graph - qqNorm:", Trait, "-", i, DI1),
+          main = paste("Normality Graph - qqNorm:", Trait, "-", i, track_feature, DI1),
           cex.main = 1,
           sub = SUBt[[i]]
         )
@@ -266,7 +267,7 @@ DiagFunc <-
                main = "",
                ylab = "Studentized Residuals")
         title(
-          main = paste("Normality Graph - qqPlot:", Trait, "-", i, DI1),
+          main = paste("Normality Graph - qqPlot:", Trait, "-", i, track_feature, DI1),
           cex.main = 1,
           sub = SUBt[[i]]
         )
@@ -294,7 +295,7 @@ DiagFunc <-
           ylab = "Studentized Residuals"
         )
         title(
-          main = paste("Residual Analysis:", Trait, "-", i, DI1),
+          main = paste("Residual Analysis:", Trait, "-", i, track_feature, DI1),
           cex.main = 1,
           sub = SUBt[[i]]
         )
@@ -340,32 +341,32 @@ DiagFunc <-
       if (T_BoxCox == TRUE) {
         label(NORMAL1[[i]]) <-
           paste("\nNormality Test for",
-                i,
+                i, track_feature,
                 "after BoxCox transformation",
                 DI1)
         label(ASSIMETRIA1[[i]]) <-
           paste("\nSkewness in the data of ",
-                i,
+                i, track_feature,
                 " after BoxCox transformation",
                 DI1)
         label(CURTOSE1[[i]]) <-
           paste("\nKurtosis in the data of ",
-                i,
+                i, track_feature,
                 " after BoxCox transformation",
                 DI1)
         label(HOMOCED1[[i]]) <-
           paste("\nHomoscedasticity Test for",
-                i,
+                i, track_feature,
                 " after BoxCox transformation",
                 DI1)
       } else {
-        label(NORMAL1[[i]]) <- paste("\nHomoscedasticity Test for", i, DI1)
+        label(NORMAL1[[i]]) <- paste("\nHomoscedasticity Test for", i, track_feature, DI1)
         label(ASSIMETRIA1[[i]]) <-
-          paste("\nSkewness in the data of", i, DI1)
+          paste("\nSkewness in the data of", i, track_feature, DI1)
         label(CURTOSE1[[i]]) <-
-          paste("\nKurtosis in the data of", i, DI1)
+          paste("\nKurtosis in the data of", i, track_feature, DI1)
         label(HOMOCED1[[i]]) <-
-          paste("\nHomoscedasticity Test for", i, DI1)
+          paste("\nHomoscedasticity Test for", i, track_feature, DI1)
       }
     }
     
@@ -490,7 +491,7 @@ DiagFunc <-
           freq = F
         )
         title(
-          main = paste("Histogram for", Trait, " trait:", i, DI2),
+          main = paste("Histogram for", Trait, " trait:", i, track_feature, DI2),
           cex.main = 1,
           sub = SUBt[[i]]
         )
@@ -509,16 +510,16 @@ DiagFunc <-
                xlab = "",
                ylab = "")
         title(
-          main = paste("Normality Graph - qqNorm:", Trait, "-", i, DI2),
+          main = paste("Normality Graph - qqNorm:", Trait, "-", i, track_feature, DI2),
           cex.main = 1,
           sub = SUBt[[i]]
         )
         # qqPlot
-        qqPlot(MOD[[i]]$rs.n.na,
+        qqPlot(MOD2[[i]]$rs.n.na,
                main = "",
                ylab = "Studentized Residuals")
         title(
-          main = paste("Normality Graph - qqPlot:", Trait, "-", i, DI2),
+          main = paste("Normality Graph - qqPlot:", Trait, "-", i, track_feature, DI2),
           cex.main = 1,
           sub = SUBt[[i]]
         )
@@ -546,7 +547,7 @@ DiagFunc <-
           ylab = "Studentized Residuals"
         )
         title(
-          main = paste("Residual Analysis:", Trait, "-", i, DI2),
+          main = paste("Residual Analysis:", Trait, "-", i, track_feature, DI2),
           cex.main = 1,
           sub = SUBt[[i]]
         )
@@ -589,33 +590,33 @@ DiagFunc <-
       if (T_BoxCox == TRUE) {
         label(NORMAL2[[i]]) <-
           paste("\nNormality test for ",
-                i,
+                i, track_feature,
                 " after BoxCox transformation",
                 DI2)
         label(ASSIMETRIA2[[i]]) <-
           paste("\nSkewness in the data of ",
-                i,
+                i, track_feature,
                 " after BoxCox transformation",
                 DI2)
         label(CURTOSE2[[i]]) <-
           paste("\nKurtosis in the data of ",
-                i,
+                i, track_feature,
                 " após transformação BoxCox",
                 DI2)
         label(HOMOCED2[[i]]) <-
           paste("\nHomoscedasticity Test for",
-                i,
+                i, track_feature,
                 " after BoxCox transformation",
                 DI2)
       } else {
         label(NORMAL2[[i]]) <-
-          paste0("\nNormality test for ", i, DI2)
+          paste0("\nNormality test for ", i, track_feature, DI2)
         label(ASSIMETRIA2[[i]]) <-
-          paste0("\nSkewness in the data of ", i, DI2)
+          paste0("\nSkewness in the data of ", i, track_feature, DI2)
         label(CURTOSE2[[i]]) <-
-          paste0("\nKurtosis in the data of ", i, DI2)
+          paste0("\nKurtosis in the data of ", i, track_feature, DI2)
         label(HOMOCED2[[i]]) <-
-          paste0("\nHomocedasticity Test for ", i, DI2)
+          paste0("\nHomocedasticity Test for ", i, track_feature, DI2)
       }
     }
     
