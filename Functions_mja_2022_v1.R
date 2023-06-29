@@ -718,7 +718,7 @@ COMP_MODEL <- function(Traits = c("DAP", "ALT", "VOL"),
   
   # Remove non-existent models
   TrueModel <- lapply(MODELS, function(x)
-    ! is.null(unlist(x)))
+    !is.null(unlist(x)))
   TrueModel <- names(TrueModel[which(TrueModel == T)])
   
   # Extract
@@ -800,7 +800,7 @@ COMP_MODEL <- function(Traits = c("DAP", "ALT", "VOL"),
 
 #--------------------------- Function for extract heritability and correlations ------------------#
 
-Extract_h2a <- function(Model = NULL,
+Extract_h2a_breedR <- function(Model = NULL,
                         random_effect = NULL,
                         model_type = "std") {
   Var = summary(Model)$var
