@@ -28,7 +28,7 @@ This function has been designed for use in diagnostic analysis to:
 
 # COMP_MODEL
 
-This function allows us to compare different models fitted in the `remlf90` function of the [`{breedR}` R package](https://github.com/famuvie/breedR)[@breedR].
+This function allows us to compare different models fitted in the `remlf90` function of the [`{breedR}` R package](https://github.com/famuvie/breedR) (Muñoz and Sanchez 2020).
 
 # Extract_h2a_breedR
 
@@ -44,7 +44,7 @@ The `BV_BreedR` has been developed to extract the breeding values from models in
 
 # ExtractLmer
 
-The `ExtractLmer` has been developed to extract generic parameters from models into the `lmer` function of the `{lmerTest}` R package [@lmerTest].
+The `ExtractLmer` has been developed to extract generic parameters from models into the `lmer` function of the `{lmerTest}` R package (Kuznetsova, Brockhoff, and Chistensen 2017).
 
 # BV_lmer
 
@@ -54,8 +54,16 @@ The `BV_lmer` has been developed to extract the breeding values from models into
 
 The `Thinning_BreedR` function has been developed for use in tree breeding strategies that involve thinning strategies and help to find a balance between breeding and conservation. It also allows us to test and compare different models included in the `{breedR}` package. More details on the use of this function can be found in the following papers:
 
-1.  [Thinning strategies for *Eucalyptus dunnii* population: balance between breeding and conservation using spatial variation and competition model](https://link.springer.com/article/10.1007/s11295-021-01523-w)[@dearaujo2021].
+1.  [Thinning strategies for *Eucalyptus dunnii* population: balance between breeding and conservation using spatial variation and competition model](https://link.springer.com/article/10.1007/s11295-021-01523-w) (Araujo et al. 2021).
 
-2.  [Conservative or non-conservative strategy to advance breeding generation? A case study in *Eucalyptus benthamii* using spatial variation and competition model](https://sciendo.com/pdf/10.2478/sg-2023-0001) [@dearaujo2023].
+2.  [Conservative or non-conservative strategy to advance breeding generation? A case study in *Eucalyptus benthamii* using spatial variation and competition model](https://sciendo.com/pdf/10.2478/sg-2023-0001) (Araujo et al. 2023).
 
 # Reference
+
+Araujo, Marcio José de, Rinaldo Cesar de Paula, Cristiano Bueno de Moraes, Gustavo Pieroni, and Paulo Henrique Müller da Silva. 2021. \"Thinning Strategies for Eucalyptus Dunnii Population: Balance Between Breeding and Conservation Using Spatial Variation and Competition Model.\" *Tree Genetics & Genomes* 17 (5). <https://doi.org/10.1007/s11295-021-01523-w>.
+
+Araujo, Marcio José de, Guilherme Nichele da Rocha, Regiane Abjaud Estopa, Javier Oberschelp, and Paulo Henrique Müller da Silva. 2023. \"Conservative or Non-Conservative Strategy to Advance Breeding Generation? A Case Study in *Eucalyptus Benthamii* Using Spatial Variation and Competition Model.\" *Silvae Genetica* 72 (1): 1--10. <https://doi.org/10.2478/sg-2023-0001>.
+
+Kuznetsova, Alexandra, Per B. Brockhoff, and Rune H. B. Christensen. 2017. \"lmerTest Package: Tests in Linear Mixed Effects Models\" 82. <https://doi.org/10.18637/jss.v082.i13>.
+
+Muñoz, Facundo, and Leopoldo Sanchez. 2020. \"breedR: Statistical Methods for Forest Genetic Resources Analysts.\" <https://github.com/famuvie/breedR>.
