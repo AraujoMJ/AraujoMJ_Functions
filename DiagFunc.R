@@ -27,7 +27,7 @@ DiagFunc <-
     
     # Set up track_feature
     if (track_feature != "") {
-      track_feature_label <- paste(track_feature, ": ", unique(data1[[track_feature]]))
+      track_feature_label <- paste(": ", unique(data1[[track_feature]]))
     } else {
       track_feature_label = track_feature
     }
