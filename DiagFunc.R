@@ -334,7 +334,7 @@ DiagFunc <-
     # Normalidade e homocedasticidade
     for (i in unique(unlist(data1[[Exp]]))) {
       # Teste de normalidade
-      Normal <- list(ad.test(MOD[[i]]$rs), lillie.test(MOD[[i]]$rs))
+      Normal <- try({list(ad.test(MOD[[i]]$rs), lillie.test(MOD[[i]]$rs))})
       NORMAL1[[i]] <- Normal
       # Assimetria
       Assimetria <- skewness(MOD[[i]]$rs.n.na, na.rm = T)
@@ -344,8 +344,8 @@ DiagFunc <-
       CURTOSE1[[i]] <- Curtose
       
       # Homocedasticidade
-      homoced <- leveneTest(TraitT ~ as.factor(get(Trat)),
-                            data = data1)
+      homoced <- try({leveneTest(TraitT ~ as.factor(get(Trat)),
+                            data = data1)})
       HOMOCED1[[i]] <- homoced
       
       if (T_BoxCox == TRUE) {
@@ -590,7 +590,7 @@ DiagFunc <-
     for (i in unique(unlist(data2[[Exp]]))) {
       # Teste de normalidade
       Normal <-
-        list(ad.test(MOD2[[i]]$rs), lillie.test(MOD2[[i]]$rs))
+        try({list(ad.test(MOD2[[i]]$rs), lillie.test(MOD2[[i]]$rs))})
       NORMAL2[[i]] <- Normal
       # Assimetria
       Assimetria <- skewness(MOD2[[i]]$rs.n.na, na.rm = T)
@@ -600,8 +600,8 @@ DiagFunc <-
       CURTOSE2[[i]] <- Curtose
       
       # Homocedasticidade
-      homoced <- leveneTest(TraitT ~ as.factor(get(Trat)),
-                            data = data2)
+      homoced <- try({leveneTest(TraitT ~ as.factor(get(Trat)),
+                            data = data2)})
       HOMOCED2[[i]] <- homoced
       
       if (T_BoxCox == TRUE) {
