@@ -10,6 +10,8 @@ DiagFunc <-
            Exp = "Test",
            plot_diag1 = TRUE,
            plot_diag2 = TRUE,
+           Title.plot_diag1 = NULL,
+           Title.plot_diag2 = NULL,
            plotBox1 = TRUE,
            lambda.boxcox = c(0.9, 1.1),
            # Número de análises realizadas simultaneamente
@@ -27,6 +29,13 @@ DiagFunc <-
       Exp2 <- "Exp2"
     }
     
+    # Set up track_feature
+    if (track_feature != "") {
+      track_feature_label <- paste0(": ", unique(data1[[track_feature]]))
+    } else {
+      track_feature_label = track_feature
+    }
+    
     
     if (!require("pacman")) {
       install.packages("pacman")
@@ -40,8 +49,8 @@ DiagFunc <-
       data1$REP <- 1
       Rep <- "REP"
     }
-      colnames(data1)[match(c(Rep, Trat, Exp, Trait), colnames(data1))] <-
-        c("Rep", "Trat", "Exp", "Trait")
+    colnames(data1)[match(c(Rep, Trat, Exp, Trait), colnames(data1))] <-
+      c("Rep", "Trat", "Exp", "Trait")
     
     
     if (length(colnames(data1)[duplicated(colnames(data1))]) != 0) {
@@ -106,7 +115,7 @@ DiagFunc <-
           BOX[[i]]$x[which(BOX[[i]]$y == max(BOX[[i]]$y))] > lambda.boxcox[2]) {
         cat(paste0(
           "\nTransformation to ",
-          i, " - ", Trait, " ", track_feature,
+          i, " - ", Trait, " ", track_feature, track_feature_label,
           ": ",
           "lambda = ",
           round(LAMBDA[[i]], 3),
@@ -119,7 +128,8 @@ DiagFunc <-
         
         T_BoxCox <- TRUE
       } else {
-        cat(paste0("\nNo transformation is required for ", i," - ", Trait, " ", track_feature, "\n"))
+        cat(paste0("\nNo transformation is required for ", i," - ", Trait, " ", track_feature, 
+                   track_feature_label, "\n"))
         DATA[[i]]$TraitT <- DATA[[i]][["Trait"]]
         #data1 <- bind_rows(DATA)
         T_BoxCox <- FALSE
@@ -214,7 +224,10 @@ DiagFunc <-
       for (i in unique(unlist(data1[[Exp]]))) {
         if (max(MOD[[i]]$rs, na.rm = T) > 3 |
             min(MOD[[i]]$rs, na.rm = T) < -3) {
+          if (is.null(Title.plot_diag1)) {
           DI1 <- "\nBefore removal of discrepant data"
+            } else {
+            DI1 <- paste0("\n", Title.plot_diag1)
         } else {
           DI1 <- ""
         }
@@ -239,7 +252,8 @@ DiagFunc <-
           freq = F
         )
         title(
-          main = paste0("Histogram for ", Trait, " trait: ", i, " ", track_feature, " ", DI1),
+          main = paste0("Histogram for ", Trait, " trait: ", i, " ", track_feature, 
+                        track_feature_label, " ", DI1),
           cex.main = 1,
           sub = SUBt[[i]]
         )
@@ -258,7 +272,8 @@ DiagFunc <-
                xlab = "",
                ylab = "")
         title(
-          main = paste("Normality Graph - qqNorm:", Trait, "-", i, track_feature, DI1),
+          main = paste("Normality Graph - qqNorm:", Trait, "-", i, track_feature,
+                       track_feature_label, DI1),
           cex.main = 1,
           sub = SUBt[[i]]
         )
@@ -267,7 +282,8 @@ DiagFunc <-
                main = "",
                ylab = "Studentized Residuals")
         title(
-          main = paste("Normality Graph - qqPlot:", Trait, "-", i, track_feature, DI1),
+          main = paste("Normality Graph - qqPlot:", Trait, "-", i, track_feature,
+                       track_feature_label, DI1),
           cex.main = 1,
           sub = SUBt[[i]]
         )
@@ -295,7 +311,8 @@ DiagFunc <-
           ylab = "Studentized Residuals"
         )
         title(
-          main = paste("Residual Analysis:", Trait, "-", i, track_feature, DI1),
+          main = paste("Residual Analysis:", Trait, "-", i, track_feature,
+                       track_feature_label, DI1),
           cex.main = 1,
           sub = SUBt[[i]]
         )
@@ -312,8 +329,8 @@ DiagFunc <-
       DI1 <- ""
       SUBt <- list()
       for (i in unique(unlist(data1[[Exp]]))) {
-      SUBt[[i]] <- ""
-      message("plot_diag1 = FALSE: omitting graphs before discrepant analysis")
+        SUBt[[i]] <- ""
+        message("plot_diag1 = FALSE: omitting graphs before discrepant analysis")
       }
     }
     
@@ -324,7 +341,7 @@ DiagFunc <-
     # Normalidade e homocedasticidade
     for (i in unique(unlist(data1[[Exp]]))) {
       # Teste de normalidade
-      Normal <- list(ad.test(MOD[[i]]$rs), lillie.test(MOD[[i]]$rs))
+      Normal <- try({list(ad.test(MOD[[i]]$rs), lillie.test(MOD[[i]]$rs))})
       NORMAL1[[i]] <- Normal
       # Assimetria
       Assimetria <- skewness(MOD[[i]]$rs.n.na, na.rm = T)
@@ -334,39 +351,42 @@ DiagFunc <-
       CURTOSE1[[i]] <- Curtose
       
       # Homocedasticidade
-      homoced <- leveneTest(TraitT ~ as.factor(get(Trat)),
-                            data = data1)
+      homoced <- try({leveneTest(TraitT ~ as.factor(get(Trat)),
+                            data = data1)})
       HOMOCED1[[i]] <- homoced
       
       if (T_BoxCox == TRUE) {
         label(NORMAL1[[i]]) <-
           paste("\nNormality Test for",
-                i, track_feature,
+                i, track_feature, track_feature_label,
                 "after BoxCox transformation",
                 DI1)
         label(ASSIMETRIA1[[i]]) <-
           paste("\nSkewness in the data of ",
-                i, track_feature,
+                i, track_feature, track_feature_label,
                 " after BoxCox transformation",
                 DI1)
         label(CURTOSE1[[i]]) <-
           paste("\nKurtosis in the data of ",
-                i, track_feature,
+                i, track_feature, track_feature_label,
                 " after BoxCox transformation",
                 DI1)
         label(HOMOCED1[[i]]) <-
           paste("\nHomoscedasticity Test for",
-                i, track_feature,
+                i, track_feature, track_feature_label,
                 " after BoxCox transformation",
                 DI1)
       } else {
-        label(NORMAL1[[i]]) <- paste("\nHomoscedasticity Test for", i, track_feature, DI1)
+        label(NORMAL1[[i]]) <- paste("\nHomoscedasticity Test for", i, track_feature,
+                                     track_feature_label, DI1)
         label(ASSIMETRIA1[[i]]) <-
-          paste("\nSkewness in the data of", i, track_feature, DI1)
+          paste("\nSkewness in the data of", i, track_feature, track_feature_label, DI1)
         label(CURTOSE1[[i]]) <-
-          paste("\nKurtosis in the data of", i, track_feature, DI1)
+          paste("\nKurtosis in the data of", i, track_feature,
+                track_feature_label, DI1)
         label(HOMOCED1[[i]]) <-
-          paste("\nHomoscedasticity Test for", i, track_feature, DI1)
+          paste("\nHomoscedasticity Test for", i, track_feature,
+                track_feature_label, DI1)
       }
     }
     
@@ -475,7 +495,11 @@ DiagFunc <-
       
       if (max(MOD[[i]]$rs, na.rm = T) > 3 |
           min(MOD[[i]]$rs, na.rm = T) < -3) {
+        if (is.null(Title.plot_diag2) {
         DI2 <- "\nAfter removal of discrepant data"
+          } else {
+          DI2 <- paste0("\n", Title.plot_diag2)
+          }
       } else {
         DI2 <- ""
         
@@ -491,7 +515,8 @@ DiagFunc <-
           freq = F
         )
         title(
-          main = paste("Histogram for", Trait, " trait:", i, track_feature, DI2),
+          main = paste("Histogram for", Trait, " trait:", i, track_feature,
+                       track_feature_label, DI2),
           cex.main = 1,
           sub = SUBt[[i]]
         )
@@ -510,7 +535,8 @@ DiagFunc <-
                xlab = "",
                ylab = "")
         title(
-          main = paste("Normality Graph - qqNorm:", Trait, "-", i, track_feature, DI2),
+          main = paste("Normality Graph - qqNorm:", Trait, "-", i, track_feature,
+                       track_feature_label, DI2),
           cex.main = 1,
           sub = SUBt[[i]]
         )
@@ -519,7 +545,8 @@ DiagFunc <-
                main = "",
                ylab = "Studentized Residuals")
         title(
-          main = paste("Normality Graph - qqPlot:", Trait, "-", i, track_feature, DI2),
+          main = paste("Normality Graph - qqPlot:", Trait, "-", i, track_feature,
+                       track_feature_label, DI2),
           cex.main = 1,
           sub = SUBt[[i]]
         )
@@ -547,7 +574,8 @@ DiagFunc <-
           ylab = "Studentized Residuals"
         )
         title(
-          main = paste("Residual Analysis:", Trait, "-", i, track_feature, DI2),
+          main = paste("Residual Analysis:", Trait, "-", i, track_feature,
+                       track_feature_label, DI2),
           cex.main = 1,
           sub = SUBt[[i]]
         )
@@ -573,7 +601,7 @@ DiagFunc <-
     for (i in unique(unlist(data2[[Exp]]))) {
       # Teste de normalidade
       Normal <-
-        list(ad.test(MOD2[[i]]$rs), lillie.test(MOD2[[i]]$rs))
+        try({list(ad.test(MOD2[[i]]$rs), lillie.test(MOD2[[i]]$rs))})
       NORMAL2[[i]] <- Normal
       # Assimetria
       Assimetria <- skewness(MOD2[[i]]$rs.n.na, na.rm = T)
@@ -583,40 +611,44 @@ DiagFunc <-
       CURTOSE2[[i]] <- Curtose
       
       # Homocedasticidade
-      homoced <- leveneTest(TraitT ~ as.factor(get(Trat)),
-                            data = data2)
+      homoced <- try({leveneTest(TraitT ~ as.factor(get(Trat)),
+                            data = data2)})
       HOMOCED2[[i]] <- homoced
       
       if (T_BoxCox == TRUE) {
         label(NORMAL2[[i]]) <-
           paste("\nNormality test for ",
-                i, track_feature,
+                i, track_feature, track_feature_label,
                 " after BoxCox transformation",
                 DI2)
         label(ASSIMETRIA2[[i]]) <-
           paste("\nSkewness in the data of ",
-                i, track_feature,
+                i, track_feature, track_feature_label,
                 " after BoxCox transformation",
                 DI2)
         label(CURTOSE2[[i]]) <-
           paste("\nKurtosis in the data of ",
-                i, track_feature,
+                i, track_feature, track_feature_label,
                 " após transformação BoxCox",
                 DI2)
         label(HOMOCED2[[i]]) <-
           paste("\nHomoscedasticity Test for",
-                i, track_feature,
+                i, track_feature, track_feature_label,
                 " after BoxCox transformation",
                 DI2)
       } else {
         label(NORMAL2[[i]]) <-
-          paste0("\nNormality test for ", i, track_feature, DI2)
+          paste0("\nNormality test for ", i, track_feature,
+                 track_feature_label, DI2)
         label(ASSIMETRIA2[[i]]) <-
-          paste0("\nSkewness in the data of ", i, track_feature, DI2)
+          paste0("\nSkewness in the data of ", i, track_feature,
+                 track_feature_label, DI2)
         label(CURTOSE2[[i]]) <-
-          paste0("\nKurtosis in the data of ", i, track_feature, DI2)
+          paste0("\nKurtosis in the data of ", i, track_feature,
+                 track_feature_label, DI2)
         label(HOMOCED2[[i]]) <-
-          paste0("\nHomocedasticity Test for ", i, track_feature, DI2)
+          paste0("\nHomocedasticity Test for ", i, track_feature,
+                 track_feature_label, DI2)
       }
     }
     
