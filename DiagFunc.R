@@ -226,7 +226,8 @@ DiagFunc <-
           DI1 <- "\nBefore removal of discrepant data"
             } else {
             DI1 <- paste0("\n", Title.plot_diag1)
-        } else {
+            }
+          } else {
           DI1 <- ""
         }
       }
@@ -493,15 +494,15 @@ DiagFunc <-
       
       if (max(MOD[[i]]$rs, na.rm = T) > 3 |
           min(MOD[[i]]$rs, na.rm = T) < -3) {
-        if (is.null(Title.plot_diag2) {
+        if (is.null(Title.plot_diag2)) {
         DI2 <- "\nAfter removal of discrepant data"
           } else {
           DI2 <- paste0("\n", Title.plot_diag2)
           }
       } else {
         DI2 <- ""
-        
       }
+    }
       
       for (i in unique(unlist(data2[[Exp]]))) {
         # Histograma
