@@ -8,8 +8,8 @@ DiagFunc <-
            Exp = "Test",
            plot_diag1 = TRUE,
            plot_diag2 = TRUE,
-           Title.plot_diag1 = NULL,
-           Title.plot_diag2 = NULL,
+           Title.plot_diag1 = "\nBefore removal of discrepant data",
+           Title.plot_diag2 = "\nAfter removal of discrepant data",
            plotBox1 = TRUE,
            lambda.boxcox = c(0.9, 1.1),
            # Número de análises realizadas simultaneamente
@@ -222,14 +222,12 @@ DiagFunc <-
       for (i in unique(unlist(data1[[Exp]]))) {
         if (max(MOD[[i]]$rs, na.rm = T) > 3 |
             min(MOD[[i]]$rs, na.rm = T) < -3) {
-          if (is.null(Title.plot_diag1)) {
-          DI1 <- "\nBefore removal of discrepant data"
-            } else {
-            DI1 <- paste0("\n", Title.plot_diag1)
-            } 
+          DI1 <- Title.plot_diag1
         } else {
           DI1 <- ""
         }
+      }
+        
       # Escrevendo subtítulo nos gráficos
       SUBt <- list()
       for (i in unique(unlist(data1[[Exp]]))) {
@@ -493,13 +491,10 @@ DiagFunc <-
       
       if (max(MOD[[i]]$rs, na.rm = T) > 3 |
           min(MOD[[i]]$rs, na.rm = T) < -3) {
-        if (is.null(Title.plot_diag2)) {
-        DI2 <- "\nAfter removal of discrepant data"
-          } else {
-          DI2 <- paste0("\n", Title.plot_diag2)
-          }
+        DI2 <- Title.plot_diag2
       } else {
         DI2 <- ""
+        
       }
       
       for (i in unique(unlist(data2[[Exp]]))) {
