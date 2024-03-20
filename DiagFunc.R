@@ -6,6 +6,7 @@ DiagFunc <-
            data1 = data,
            track_feature = "",
            Exp = "Test",
+           Exp_Name = "Exp",
            plot_diag1 = TRUE,
            plot_diag2 = TRUE,
            Title.plot_diag1 = "\nBefore removal of discrepant data",
@@ -20,8 +21,8 @@ DiagFunc <-
              c(NULL, NULL)) {
     # Input Exp column if necessary
     if (is.null(Exp)) {
-      data1$Exp <- "Exp1"
-      Exp <- "Exp"
+      data1[[Exp_Name]] <- "Exp1"
+      Exp_Name <- "Exp"
       Exp2 <- NULL
     } else {
       Exp2 <- "Exp2"
