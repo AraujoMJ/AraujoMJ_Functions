@@ -19,9 +19,11 @@ DiagFunc <-
            # Column names to return
            ColumnNames_To_Return =
              c(NULL, NULL)) {
+    
+    Exp_Name <<- Exp_Name
     # Input Exp column if necessary
     if (is.null(Exp)) {
-      data1[["Exp"]] <- Exp_Name
+      data1$Exp <- Exp_Name
       Exp <- "Exp"
       Exp2 <- NULL
     } else {
