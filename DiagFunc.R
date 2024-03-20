@@ -21,7 +21,7 @@ DiagFunc <-
              c(NULL, NULL)) {
     # Input Exp column if necessary
     if (is.null(Exp)) {
-      data1[[Exp]] <- Exp_Name
+      data1[["Exp"]] <- Exp_Name
       Exp <- "Exp"
       Exp2 <- NULL
     } else {
