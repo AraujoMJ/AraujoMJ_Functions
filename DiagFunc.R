@@ -8,6 +8,8 @@ DiagFunc <-
            Exp = "Test",
            plot_diag1 = TRUE,
            plot_diag2 = TRUE,
+           Title.plot_diag1 = NULL,
+           Title.plot_diag2 = NULL,
            plotBox1 = TRUE,
            lambda.boxcox = c(0.9, 1.1),
            # Número de análises realizadas simultaneamente
@@ -220,7 +222,10 @@ DiagFunc <-
       for (i in unique(unlist(data1[[Exp]]))) {
         if (max(MOD[[i]]$rs, na.rm = T) > 3 |
             min(MOD[[i]]$rs, na.rm = T) < -3) {
+          if (is.null(Title.plot_diag1)) {
           DI1 <- "\nBefore removal of discrepant data"
+            } else {
+            DI1 <- paste0("\n", Title.plot_diag1)
         } else {
           DI1 <- ""
         }
@@ -488,7 +493,11 @@ DiagFunc <-
       
       if (max(MOD[[i]]$rs, na.rm = T) > 3 |
           min(MOD[[i]]$rs, na.rm = T) < -3) {
+        if (is.null(Title.plot_diag2) {
         DI2 <- "\nAfter removal of discrepant data"
+          } else {
+          DI2 <- paste0("\n", Title.plot_diag2)
+          }
       } else {
         DI2 <- ""
         
