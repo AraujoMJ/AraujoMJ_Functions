@@ -226,8 +226,7 @@ DiagFunc <-
           DI1 <- "\nBefore removal of discrepant data"
             } else {
             DI1 <- paste0("\n", Title.plot_diag1)
-            }
-          } else {
+            } else {
           DI1 <- ""
         }
       }
@@ -498,8 +497,7 @@ DiagFunc <-
         DI2 <- "\nAfter removal of discrepant data"
           } else {
           DI2 <- paste0("\n", Title.plot_diag2)
-          }
-      } else {
+          } else {
         DI2 <- ""
       }
     }
