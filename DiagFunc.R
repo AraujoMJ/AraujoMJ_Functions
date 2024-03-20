@@ -251,7 +251,7 @@ DiagFunc <-
           freq = F
         )
         title(
-          main = paste0("Histogram for ", Trait, " trait: ", i, " ", track_feature, 
+          main = paste0("Histogram for ", Trait, " trait - ", i, " ", track_feature, 
                         track_feature_label, " ", DI1),
           cex.main = 1,
           sub = SUBt[[i]]
@@ -510,7 +510,7 @@ DiagFunc <-
           freq = F
         )
         title(
-          main = paste("Histogram for", Trait, " trait:", i, track_feature,
+          main = paste("Histogram for", Trait, " trait - ", i, track_feature,
                        track_feature_label, DI2),
           cex.main = 1,
           sub = SUBt[[i]]
