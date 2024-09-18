@@ -1,3 +1,57 @@
+#' Thinning Strategies Based on Breeding Values
+#'
+#' This function performs thinning strategies for tree breeding trials using breeding values (BV).
+#' It groups families into different categories (up to four groups) based on inflection points in the BV distribution.
+#' It offers different strategies for selection between and within families (BW strategy) and selection of the best individuals (BI strategy).
+#'
+#' @param BV_Column Character. The column name in the data that contains the breeding values (BV). Default is "a_total".
+#' @param Trait Character. Name of the trait being analyzed.
+#' @param BV_fam Data frame. Contains breeding values of the families.
+#' @param Data_Total Data frame. Contains breeding values and experimental information of the trees.
+#' @param Family_Data_Total Character. Name of the column in `Data_Total` containing family identifiers.
+#' @param Bloc_Column Character. The column in `Data_Total` for blocks or experimental plots. Default is "Block".
+#' @param nGroups Integer. Number of groups for thinning strategies. Must be 2, 3, or 4. Default is 4.
+#' @param label.group.y Numeric vector. Positions for group labels on the y-axis. Default is `c(1, 1, 1, 1)`.
+#' @param Plot.Rank Logical. If TRUE, plot the ranking of families based on BV. Default is TRUE.
+#' @param save_plot_rank Logical. If TRUE, save the plot of families' ranking. Default is TRUE.
+#' @param IS Numeric vector. Selection intensities for the BI strategy. Default is NULL.
+#' @param id Character. Column name for unique identifiers of trees. Default is "ID".
+#' @param nGroups3 Character. Specifies whether the third group should be formed on the "left" or "right" side of the inflection point. Default is "left".
+#' @param STP Logical. If TRUE, thinning strategy will be applied Single-Tree-Plot (STP). Default is FALSE.
+#' @param seq_combinations Numeric vector. Custom sequence for generating combinations in thinning strategy. Default is NULL.
+#' @param length_seq_combinations Numeric. Length of the sequence for combinations of selected plants per group. Default is 2.
+#' @param save_table_xlsx Logical. If TRUE, save the output tables in Excel format. Default is TRUE.
+#'
+#' @return A list containing:
+#' \item{Thinning}{Data frame summarizing the thinning strategies and corresponding genetic gains and effective number (NE).}
+#' \item{Strategies}{A list of data frames containing the selected families and trees under different thinning strategies.}
+#' \item{BV_Fam}{Data frame summarizing breeding values for families, including their assigned group.}
+#' \item{ggPlot_families_rank}{A ggplot object showing the ranking of families based on BV.}
+#'
+#' @details
+#' The thinning strategies are based on dividing families into groups based on inflection points in the breeding values. These groups can be used in selection between families and within families (BW strategy) or to select the top-performing individuals regardless of family (BI strategy). The function allows for flexibility in the number of groups (2, 3, or 4) and customizes the selection process based on the input parameters.
+#'
+#' @note
+#' The function relies on the `RootsExtremaInflections` and `gtools` packages for finding inflection points and generating combinations, respectively. The function will automatically install these packages if they are not already installed.
+#'
+#' @import dplyr ggplot2 openxlsx gtools RootsExtremaInflections
+#' @examples
+#' \dontrun{
+#' BV <- data.frame(
+#'   Family = 1:10,
+#'   a_total = rnorm(10)
+#' )
+#' Data_Total <- data.frame(
+#'   Family = rep(1:10, each = 10),
+#'   Block = rep(1:10, 10),
+#'   ID = 1:100,
+#'   a = rnorm(100)
+#' )
+#' Trait <- "Height"
+#' Thinning_BreedR(BV_fam = BV, Trait = Trait, Data_Total = Data_Total, Family_Data_Total = "Family")
+#' }
+#' @export
+
 #---------------------- Function for thinning strategies --------------------------
 Thinning_BreedR <- function(BV_Column = "a_total",
                             Trait = Trait,
@@ -19,6 +73,7 @@ Thinning_BreedR <- function(BV_Column = "a_total",
   # if (exists("nGroups", mode = "any")) {
   #   nGroups = readline(prompt = "Enter with the number of groups for thinning strategies:")
   # }
+  
   if (!require("RootsExtremaInflections")) {
     install.packages("RootsExtremaInflections")
   }
@@ -41,7 +96,7 @@ Thinning_BreedR <- function(BV_Column = "a_total",
   MajorBV_fam <- BV_fam |>
     filter(get(BV_Column) >= 0)
   
-  # Familie with BV near of zero
+  # Families with BV near of zero
   Fam_Zero <- which.min(MajorBV_fam[[BV_Column]])
   # Families with negative BV
   MinorBV_fam <- BV_fam |>
@@ -228,8 +283,16 @@ Thinning_BreedR <- function(BV_Column = "a_total",
       colour = "gray60",
       size = 0.5
     ) +
+    # Add the groups used
     nGroupFinal +
-    AnnotateGroup
+    # Annotate
+    AnnotateGroup +
+    # Change x-axis
+    scale_x_discrete(
+      guide = guide_axis(
+        n.dodge = 1
+      )
+    )
   if (Plot.Rank == TRUE) {
     plot(families_rank)
   }
@@ -273,10 +336,18 @@ Thinning_BreedR <- function(BV_Column = "a_total",
   }
   
   # Map Plot
-  Data_Total <- Data_Total |>
-    mutate(Plot = ifelse(STP == TRUE, get(Bloc_Column), paste0(
-      get(Family_Data_Total), sep = ":", get(Bloc_Column)
-    )))
+  if (STP) {
+    Data_Total[["Plot"]] <- Data_Total[[Bloc_Column]]
+  } else {
+    Data_Total[["Plot"]] <- paste0(
+      Data_Total[[Family_Data_Total]], sep = ":", Data_Total[[Bloc_Column]]
+    )
+  }
+  
+  # Data_Total <- Data_Total |>
+  #   mutate(Plot = ifelse(STP == TRUE, get(Bloc_Column), paste0(
+  #     get(Family_Data_Total), sep = ":", get(Bloc_Column)
+  #   )))
   
   # Combination for thinning strategies
   
@@ -289,6 +360,39 @@ Thinning_BreedR <- function(BV_Column = "a_total",
         n = as.numeric(length(STP_seq)) + 1,
         r = as.numeric(nGroups),
         v = as.numeric(c(seq(max(STP_seq), 1, -length_seq_combinations),0)),
+        set = F,
+        repeats.allowed = T
+      )
+    } else{
+      AllComb <- gtools::combinations(
+        n = as.numeric(length(seq_combinations)) + 1,
+        r = as.numeric(nGroups),
+        v = as.numeric(c(seq(max(seq_combinations), 1, -1),0)),
+        set = F,
+        repeats.allowed = T
+      )
+    }
+    
+    
+    AllComb <- AllComb[-nrow(AllComb), ]
+    colnames(AllComb) <- paste0("G", 1:nGroups)
+    rownames(AllComb) <- seq.int(nrow(AllComb))
+  } else {
+    
+    if (length_seq_combinations > 1) {
+      warning(paste0("You choose 'length_seq_combinations' equal ", 
+                     length_seq_combinations,
+                     ", the combinations of selected trees per groups will be not sequential"))
+    }
+    
+    if (is.null(seq_combinations)) {
+      nRep <- length(unique(Data_Total[[Bloc_Column]]))
+      NonSTP_seq <- seq(1, nRep, length_seq_combinations)
+      
+      AllComb <- gtools::combinations(
+        n = as.numeric(length(NonSTP_seq)) + 1,
+        r = as.numeric(nGroups),
+        v = as.numeric(c(seq(max(NonSTP_seq), 1, -length_seq_combinations),0)),
         set = F,
         repeats.allowed = T
       )
@@ -325,7 +429,7 @@ Thinning_BreedR <- function(BV_Column = "a_total",
         arrange(Family, desc(a))
       if (AllComb[i, which(colnames(AllComb) == k)] == 0) {
         gg.BW[[k]][[i]] <-
-          dplyr::slice(g.bw, n = AllComb[i, which(colnames(AllComb) == k)])
+          dplyr::slice_head(g.bw, n = AllComb[i, which(colnames(AllComb) == k)])
       } else {
         gg.BW[[k]][[i]] <-
           dplyr::slice_head(g.bw, n = AllComb[i, which(colnames(AllComb) == k)])
@@ -352,7 +456,7 @@ Thinning_BreedR <- function(BV_Column = "a_total",
     }
   }
   # Set names in the strategies
-  G.BW <- setNames(G.BW, seq_along(G.BW))
+  G.BW <- setNames(G.BW, as.character(seq_along(G.BW)))
   
   # BI Strategies: Selection of the best individuals regardless of family that he belongs
   ## Second group strategy
@@ -377,7 +481,7 @@ Thinning_BreedR <- function(BV_Column = "a_total",
     SeleTop.BI[[i]]["Strategy"] <- "BI"
   }
   SeleTop.BI <-
-    setNames(SeleTop.BI, seq(1 + length(G.BW), (length(G.BW) + length(SeleTop.BI))))
+    setNames(SeleTop.BI, as.character(seq(1 + length(G.BW), (length(G.BW) + length(SeleTop.BI)))))
   
   # Combining BW and BI strategies
   Strategies <- append(G.BW, SeleTop.BI)
