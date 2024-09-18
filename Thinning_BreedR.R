@@ -19,6 +19,13 @@ Thinning_BreedR <- function(BV_Column = "a_total",
   # if (exists("nGroups", mode = "any")) {
   #   nGroups = readline(prompt = "Enter with the number of groups for thinning strategies:")
   # }
+  if (!require("RootsExtremaInflections")) {
+    install.packages("RootsExtremaInflections")
+  }
+  
+  if (!require("gtools")) {
+    install.packages("gtools")
+  }
   
   if (!nGroups %in% 2:4) {
     stop("nGroups should be: 2, 3 or 4")
