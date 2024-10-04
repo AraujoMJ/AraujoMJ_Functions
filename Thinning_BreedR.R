@@ -98,6 +98,20 @@ Thinning_BreedR <- function(BV_Column = "a_total",
   # Data_Total <- Data_Total |> 
   #   rename_with(~ "Family", all_of(Family_Data_Total))
   
+  # Merge Data Total and BV data
+  Data_Total <- Data_Total |> 
+    mutate(
+      Family = get(Family_Data_Total)
+    ) |> 
+    left_join(
+      BV_fam |> 
+        dplyrr:select(
+          Family,
+          BV_Column
+        ),
+      by = "Family"
+    )
+  
   # Families with positive BV
   MajorBV_fam <- BV_fam |>
     filter(get(BV_Column) >= 0)
@@ -432,7 +446,7 @@ Thinning_BreedR <- function(BV_Column = "a_total",
       g.bw <- Data_Total %>%
         filter(Group == k) %>%
         dplyr::group_by(Family, Plot) %>%
-        arrange(Family, desc(a))
+        arrange(Family, desc(get(BV_Column)))
       if (AllComb[i, which(colnames(AllComb) == k)] == 0) {
         gg.BW[[k]][[i]] <-
           dplyr::slice_head(g.bw, n = AllComb[i, which(colnames(AllComb) == k)])
@@ -457,7 +471,7 @@ Thinning_BreedR <- function(BV_Column = "a_total",
       
       
       G.BW[[i]][, "BV"] <-
-        G.BW[[i]]$a + mean(Data_Total[[Trait]], na.rm = T)
+        G.BW[[i]][[BV_Column]] + mean(Data_Total[[Trait]], na.rm = T)
       G.BW[[i]][, "Strategy"] <- "BW"
     }
   }
@@ -480,9 +494,9 @@ Thinning_BreedR <- function(BV_Column = "a_total",
   for (i in seq_along(IC.TOP)) {
     seletop <- Data_Total %>%
       group_by(Family, Plot) %>%
-      arrange(desc(a)) %>%
+      arrange(desc(get(BV_Column))) %>%
       head(n = round(nrow(Data_Total) * IC.TOP[i]))
-    seletop$BV <- seletop$a + mean(Data_Total[[Trait]], na.rm = T)
+    seletop$BV <- seletop[[BV_Column]] + mean(Data_Total[[Trait]], na.rm = T)
     SeleTop.BI[[i]] <- seletop
     SeleTop.BI[[i]]["Strategy"] <- "BI"
   }
