@@ -613,7 +613,8 @@ Thinning_BreedR <- function(BV_Column = "a_total",
         Sys.Date(),
         ".xlsx"
       ),
-      overwrite = T
+      overwrite = T,
+      asTable = T
     )
     write.xlsx(
       Strategies,
@@ -627,7 +628,8 @@ Thinning_BreedR <- function(BV_Column = "a_total",
         Sys.Date(),
         ".xlsx"
       ),
-      overwrite = T
+      overwrite = T,
+      asTable = T
     )
     write.xlsx(
       BV_fam,
@@ -641,7 +643,8 @@ Thinning_BreedR <- function(BV_Column = "a_total",
         Sys.Date(),
         ".xlsx"
       ),
-      overwrite = T
+      overwrite = T,
+      asTable = T
     )
   }
   
