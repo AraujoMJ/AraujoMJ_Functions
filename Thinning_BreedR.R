@@ -105,7 +105,7 @@ Thinning_BreedR <- function(BV_Column = "a_total",
     ) |> 
     left_join(
       BV_fam |> 
-        dplyrr:select(
+        dplyr:select(
           Family,
           BV_Column
         ),
