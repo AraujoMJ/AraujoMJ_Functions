@@ -90,6 +90,7 @@ Thinning_BreedR <- function(BV_Column = "a_total",
   }
   
   BV_fam <- BV_fam |>
+    rename_with(~ "Family", all_of(Family_Column)) |> 
     arrange(desc(get(BV_Column))) |>
     mutate(Family = factor(Family, levels = Family))
   
