@@ -608,8 +608,7 @@ Thinning_BreedR <- function(BV_Column = "a_total",
       list(
         Thinning = Thinning,
         Strategies = Strategies,
-        BV_fam = BV_fam,
-        
+        BV_fam = BV_fam
       ),
       file = paste0(
         "Thinning_Strategies_for_",
