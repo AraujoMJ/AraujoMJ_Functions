@@ -60,6 +60,7 @@ Thinning_BreedR <- function(BV_Column = "a_total",
                             Data_Total = BV$Data_Total,
                             Family_Data_Total = Family,
                             Bloc_Column = "Block",
+                            Family_Column = "Family",
                             nGroups = 4,
                             label.group.y = c(1, 1, 1, 1),
                             Plot.Rank = TRUE,
@@ -92,7 +93,9 @@ Thinning_BreedR <- function(BV_Column = "a_total",
     arrange(desc(get(BV_Column))) |>
     mutate(Family = factor(Family, levels = Family))
   
-  
+  # Rename target column to 'Family'
+  Data_Total <- Data_Total |> 
+    rename_with(~ "Family", all_of(Family_Column))
   
   # Families with positive BV
   MajorBV_fam <- BV_fam |>
