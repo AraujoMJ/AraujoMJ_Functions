@@ -606,9 +606,9 @@ Thinning_BreedR <- function(BV_Column = "a_total",
     require(openxlsx)
     write.xlsx(
       list(
-        Thinning = as.data.frame(Thinning),
-        Strategies = as.data.frame(Strategies),
-        BV_fam = as.data.frame(BV_fam)
+        Thinning = data.frame(Thinning),
+        Strategies = data.frame(Strategies),
+        BV_fam = data.frame(BV_fam)
       ),
       file = paste0(
         "Thinning_Strategies_for_",
