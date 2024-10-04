@@ -18,6 +18,7 @@
 #' @param id Character. Column name for unique identifiers of trees. Default is "ID".
 #' @param nGroups3 Character. Specifies whether the third group should be formed on the "left" or "right" side of the inflection point. Default is "left".
 #' @param STP Logical. If TRUE, thinning strategy will be applied Single-Tree-Plot (STP). Default is FALSE.
+#' @param n.dodge_plot1 Integer. This argument allows to use different n.dodge when plotting the graph of BV ~ x.axis factor (genotype being analysed, such as families). Defaut is 1
 #' @param seq_combinations Numeric vector. Custom sequence for generating combinations in thinning strategy. Default is NULL.
 #' @param length_seq_combinations Numeric. Length of the sequence for combinations of selected plants per group. Default is 2.
 #' @param save_table_xlsx Logical. If TRUE, save the output tables in Excel format. Default is TRUE.
