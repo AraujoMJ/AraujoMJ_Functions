@@ -605,39 +605,14 @@ Thinning_BreedR <- function(BV_Column = "a_total",
   if (save_table_xlsx == TRUE) {
     require(openxlsx)
     write.xlsx(
-      Thinning,
+      list(
+        Thinning = Thinning,
+        Strategies = Strategies,
+        BV_fam = BV_fam,
+        
+      ),
       file = paste0(
         "Thinning_Strategies_for_",
-        Trait,
-        "_trait_",
-        Sys.Date(),
-        ".xlsx"
-      ),
-      overwrite = T,
-      asTable = T
-    )
-    write.xlsx(
-      Strategies,
-      file = paste0(
-        length(Strategies),
-        "strategies_for_",
-        nGroups,
-        "_groups_",
-        Trait,
-        "_trait_",
-        Sys.Date(),
-        ".xlsx"
-      ),
-      overwrite = T,
-      asTable = T
-    )
-    write.xlsx(
-      BV_fam,
-      file = paste0(
-        "Summary_of_families",
-        "_for_",
-        nGroups,
-        "_groups_",
         Trait,
         "_trait_",
         Sys.Date(),
