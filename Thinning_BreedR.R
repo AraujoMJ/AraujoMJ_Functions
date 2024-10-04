@@ -70,6 +70,7 @@ Thinning_BreedR <- function(BV_Column = "a_total",
                             nGroups3 = "left",
                             STP = FALSE,
                             n.dodge_plot1 = 1,
+                            angle_plot1 = 45,
                             seq_combinations = NULL,
                             length_seq_combinations = 2,
                             save_table_xlsx = TRUE) {
@@ -242,19 +243,19 @@ Thinning_BreedR <- function(BV_Column = "a_total",
       AnnotateGroup <- list(
         annotate(
           "text",
-          x = Inflexi_major / 2,
+          x = Fam_Zero / 2,
           y = label.group.y[1],
           label = "G1"
         ),
         annotate(
           "text",
-          x = (Fam_Zero - (Fam_Zero - Inflexi_major) / 2),
+          x = (Fam_Zero + (Fam_Zero - Inflexi_major) / 2),
           y = label.group.y[2],
           label = "G2"
         ),
         annotate(
           "text",
-          x = Fam_Zero + Fam_Zero / 2,
+          x = Inflexi_minor + ( nrow(BV_fam) - Inflexi_minor) / 2,
           y = label.group.y[3],
           label = "G3"
         )
@@ -310,7 +311,8 @@ Thinning_BreedR <- function(BV_Column = "a_total",
     # Change x-axis
     scale_x_discrete(
       guide = guide_axis(
-        n.dodge = n.dodge_plot1
+        n.dodge = n.dodge_plot1,
+        angle = angle_plot1
       )
     )
   if (Plot.Rank == TRUE) {
@@ -319,31 +321,32 @@ Thinning_BreedR <- function(BV_Column = "a_total",
   
   # Map group for trees in dataset that have BV and experiment information
   Data_Total$Group <- NA
+  
   # G1
   if (nGroups == 2) {
-    Data_Total[Data_Total[, Family_Data_Total] %in% as.numeric(as.character(BV_fam[1:Fam_Zero, "Family"])), "Group"] <-
+    Data_Total[Data_Total[, Family_Data_Total] %in% as.vactor(BV_fam[1:Fam_Zero, "Family"]), "Group"] <-
       "G1"
   } else {
-    Data_Total[Data_Total[, Family_Data_Total] %in% as.numeric(as.character(BV_fam[1:Inflexi_major, "Family"])), "Group"] <-
+    Data_Total[Data_Total[, Family_Data_Total] %in% as.vector(BV_fam[1:Inflexi_major, "Family"]), "Group"] <-
       "G1"
   }
   
   # G2
   if (nGroups == 2) {
-    Data_Total[Data_Total[, Family_Data_Total] %in% as.numeric(as.character(BV_fam[(Fam_Zero + 1):nrow(BV_fam), "Family"])), "Group"] <-
+    Data_Total[Data_Total[, Family_Data_Total] %in% as.vector(BV_fam[(Fam_Zero + 1):nrow(BV_fam), "Family"]), "Group"] <-
       "G2"
   } else {
-    Data_Total[Data_Total[, Family_Data_Total] %in% as.numeric(as.character(BV_fam[(Inflexi_major + 1):Fam_Zero, "Family"])), "Group"] <-
+    Data_Total[Data_Total[, Family_Data_Total] %in% as.vector(BV_fam[(Inflexi_major + 1):Fam_Zero, "Family"]), "Group"] <-
       "G2"
   }
   
   # G3
   if (nGroups == 3) {
-    Data_Total[Data_Total[, Family_Data_Total] %in% as.numeric(as.character(BV_fam[(Fam_Zero + 1):nrow(BV_fam), "Family"])), "Group"] <-
+    Data_Total[Data_Total[, Family_Data_Total] %in% as.vector(BV_fam[(Fam_Zero + 1):nrow(BV_fam), "Family"]), "Group"] <-
       "G3"
   } else {
     if (nGroups == 4) {
-      Data_Total[Data_Total[, Family_Data_Total] %in% as.numeric(as.character(BV_fam[(Fam_Zero + 1):Inflexi_minor, "Family"])), "Group"] <-
+      Data_Total[Data_Total[, Family_Data_Total] %in% as.vector(BV_fam[(Fam_Zero + 1):Inflexi_minor, "Family"]), "Group"] <-
         "G3"
     }
     
@@ -351,7 +354,7 @@ Thinning_BreedR <- function(BV_Column = "a_total",
   
   # G4
   if (nGroups == 4) {
-    Data_Total[Data_Total[, Family_Data_Total] %in% as.numeric(as.character(BV_fam[(Inflexi_minor + 1):nrow(BV_fam), "Family"])), "Group"] <-
+    Data_Total[Data_Total[, Family_Data_Total] %in% as.vector(BV_fam[(Inflexi_minor + 1):nrow(BV_fam), "Family"]), "Group"] <-
       "G4"
   }
   
@@ -433,9 +436,10 @@ Thinning_BreedR <- function(BV_Column = "a_total",
   }
   
   
-  # Mutate Family_Data_Total
+  # Mutate Family_Data_Total and eliminate missing data
   Data_Total <- Data_Total |>
-    mutate(Family = as.character(get(Family_Data_Total)))
+    mutate(Family = as.character(get(Family_Data_Total))) |> 
+    filter(!is.na(get(Trait)))
   
   
   # BW strategies: Selection between and within families
