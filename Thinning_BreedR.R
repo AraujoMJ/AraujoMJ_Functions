@@ -71,6 +71,7 @@ Thinning_BreedR <- function(BV_Column = "a_total",
                             STP = FALSE,
                             n.dodge_plot1 = 1,
                             angle_plot1 = 45,
+                            additional_layer_plot1 = theme(axis.text.x = element_text(size = 2)),
                             seq_combinations = NULL,
                             length_seq_combinations = 2,
                             save_table_xlsx = TRUE) {
@@ -316,7 +317,7 @@ Thinning_BreedR <- function(BV_Column = "a_total",
       )
     )
   if (Plot.Rank == TRUE) {
-    plot(families_rank)
+    plot(families_rank + additional_layer_plot1)
   }
   
   # Map group for trees in dataset that have BV and experiment information
