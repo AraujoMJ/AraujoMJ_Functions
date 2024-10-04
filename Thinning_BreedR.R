@@ -67,6 +67,7 @@ Thinning_BreedR <- function(BV_Column = "a_total",
                             id = "ID",
                             nGroups3 = "left",
                             STP = FALSE,
+                            n.dodge_plot1 = 1,
                             seq_combinations = NULL,
                             length_seq_combinations = 2,
                             save_table_xlsx = TRUE) {
@@ -290,7 +291,7 @@ Thinning_BreedR <- function(BV_Column = "a_total",
     # Change x-axis
     scale_x_discrete(
       guide = guide_axis(
-        n.dodge = 1
+        n.dodge = n.dodge_plot1
       )
     )
   if (Plot.Rank == TRUE) {
