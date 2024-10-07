@@ -74,7 +74,9 @@ Thinning_BreedR <- function(BV_Column = "a_total",
                             additional_layer_plot1 = theme(axis.text.x = element_text(size = 8)),
                             seq_combinations = NULL,
                             length_seq_combinations = 2,
-                            save_table_xlsx = TRUE) {
+                            save_table_xlsx = TRUE,
+                            export_id = "",
+                            format_plot = ".tiff") {
   # if (exists("nGroups", mode = "any")) {
   #   nGroups = readline(prompt = "Enter with the number of groups for thinning strategies:")
   # }
@@ -614,6 +616,7 @@ Thinning_BreedR <- function(BV_Column = "a_total",
         "Thinning_Strategies_for_",
         Trait,
         "_trait_",
+        export_id,
         Sys.Date(),
         ".xlsx"
       ),
@@ -626,6 +629,7 @@ Thinning_BreedR <- function(BV_Column = "a_total",
         "Strategies_",
         Trait,
         "_trait_",
+        export_id,
         Sys.Date(),
         ".xlsx"
       ),
@@ -635,7 +639,7 @@ Thinning_BreedR <- function(BV_Column = "a_total",
   }
   
   if (save_plot_rank == TRUE) {
-    ggsave(filename = "families_rank.tiff", plot = families_rank)
+    ggsave(filename = paste0("families_rank_", export_id, format_plot), plot = families_rank)
   }
   
   return(
