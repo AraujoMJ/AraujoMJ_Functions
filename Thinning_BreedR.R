@@ -246,13 +246,13 @@ Thinning_BreedR <- function(BV_Column = "a_total",
       AnnotateGroup <- list(
         annotate(
           "text",
-          x = Fam_Zero / 2,
+          x = Inflexi_major / 2,
           y = label.group.y[1],
           label = "G1"
         ),
         annotate(
           "text",
-          x = (Fam_Zero + (Fam_Zero - Inflexi_major) / 2),
+          x = (Fam_Zero - (Fam_Zero - Inflexi_major) / 2),
           y = label.group.y[2],
           label = "G2"
         ),
