@@ -10,6 +10,7 @@
 #' @param Data_Total Data frame. Contains breeding values and experimental information of the trees.
 #' @param Family_Data_Total Character. Name of the column in `Data_Total` containing family identifiers.
 #' @param Bloc_Column Character. The column in `Data_Total` for blocks or experimental plots. Default is "Block".
+#' @param Family_Column Character. The column in `BV_fam` that specifies family identifiers. Default is "Family".
 #' @param nGroups Integer. Number of groups for thinning strategies. Must be 2, 3, or 4. Default is 4.
 #' @param label.group.y Numeric vector. Positions for group labels on the y-axis. Default is `c(1, 1, 1, 1)`.
 #' @param Plot.Rank Logical. If TRUE, plot the ranking of families based on BV. Default is TRUE.
@@ -18,10 +19,17 @@
 #' @param id Character. Column name for unique identifiers of trees. Default is "ID".
 #' @param nGroups3 Character. Specifies whether the third group should be formed on the "left" or "right" side of the inflection point. Default is "left".
 #' @param STP Logical. If TRUE, thinning strategy will be applied Single-Tree-Plot (STP). Default is FALSE.
-#' @param n.dodge_plot1 Integer. This argument allows to use different n.dodge when plotting the graph of BV ~ x.axis factor (genotype being analysed, such as families). Defaut is 1
+#' @param n.dodge_plot1 Integer. This argument allows to use different n.dodge values when plotting the graph of BV ~ x-axis factor (e.g., families). Default is 1.
+#' @param angle_plot1 Numeric. The angle of the x-axis text labels in the plot. Default is 45 degrees.
+#' @param nt_alpha1 Numeric vector. Parameters for inflection point analysis on the best families. Default is `c(2, 5)`.
+#' @param nt_alpha2 Numeric vector. Parameters for inflection point analysis on the worst families. Default is `c(2, 5)`.
+#' @param finfl_Value Character vector. Specifies whether to use "max" or "min" for finding inflection points in both the best and worst families. Must be a vector of length 2. Default is `c("max", "max")`.
+#' @param additional_layer_plot1 ggplot2 layer. Additional ggplot layers to be added to the plot of family rankings. Default is `theme(axis.text.x = element_text(size = 8))`.
 #' @param seq_combinations Numeric vector. Custom sequence for generating combinations in thinning strategy. Default is NULL.
 #' @param length_seq_combinations Numeric. Length of the sequence for combinations of selected plants per group. Default is 2.
 #' @param save_table_xlsx Logical. If TRUE, save the output tables in Excel format. Default is TRUE.
+#' @param export_id Character. A string to customize the output file names by appending it to the file name. Default is an empty string.
+#' @param format_plot Character. Specifies the file format for the plot output. Default is ".tiff".
 #'
 #' @return A list containing:
 #' \item{Thinning}{Data frame summarizing the thinning strategies and corresponding genetic gains and effective number (NE).}
