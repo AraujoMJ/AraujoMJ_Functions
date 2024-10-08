@@ -354,7 +354,7 @@ Thinning_BreedR <- function(BV_Column = "a_total",
   
   # G1
   if (nGroups == 2) {
-    Data_Total[Data_Total[, Family_Data_Total] %in% as.vactor(BV_fam[1:Fam_Zero, "Family"]), "Group"] <-
+    Data_Total[Data_Total[, Family_Data_Total] %in% as.vector(BV_fam[1:Fam_Zero, "Family"]), "Group"] <-
       "G1"
   } else {
     Data_Total[Data_Total[, Family_Data_Total] %in% as.vector(BV_fam[1:Inflexi_major, "Family"]), "Group"] <-
