@@ -71,6 +71,8 @@ Thinning_BreedR <- function(BV_Column = "a_total",
                             STP = FALSE,
                             n.dodge_plot1 = 1,
                             angle_plot1 = 45,
+                            nt_alpha1 = c(2, 5),
+                            nt_alpha2 = c(2, 5),
                             additional_layer_plot1 = theme(axis.text.x = element_text(size = 8)),
                             seq_combinations = NULL,
                             length_seq_combinations = 2,
@@ -130,25 +132,26 @@ Thinning_BreedR <- function(BV_Column = "a_total",
   Inflex1 <- RootsExtremaInflections::inflexi(
     x = 1:nrow(MajorBV_fam),
     y = MajorBV_fam[[BV_Column]],
-    nt = 2,
+    nt = nt_alpha1[1],
+    alpha = nt_alpha1[2],
     i1 = 1,
     i2 = nrow(MajorBV_fam),
     plots = F,
   )
   
-  Inflexi_major <- Inflex1$finfl[1]
+  Inflexi_major <- max(Inflex1$finfl, na.rm = T)
   
   # Found inflexion point in the worst families
   Inflex2 <- RootsExtremaInflections::inflexi(
     x = 1:nrow(MinorBV_fam),
     y = MinorBV_fam[[BV_Column]],
-    nt = 2,
-    i1 = 1,
+    nt = nt_alpha2[1],
+    i1 = nt_alpha2[2],
     i2 = nrow(MinorBV_fam),
     plots = F,
   )
   
-  Inflexi_minor <- Fam_Zero + Inflex2$finfl[1]
+  Inflexi_minor <- Fam_Zero + max(Inflex2$finfl, na.rm = T)
   Col1 = "gray70"
   Col2 = "blue"
   Col3 = "red"
