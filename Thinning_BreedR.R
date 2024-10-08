@@ -61,6 +61,7 @@
 #' }
 #' @export
 
+
 #---------------------- Function for thinning strategies --------------------------
 Thinning_BreedR <- function(BV_Column = "a_total",
                             Trait = Trait,
@@ -81,6 +82,7 @@ Thinning_BreedR <- function(BV_Column = "a_total",
                             angle_plot1 = 45,
                             nt_alpha1 = c(2, 5),
                             nt_alpha2 = c(2, 5),
+                            finfl_Value = c("max", "max"),
                             additional_layer_plot1 = theme(axis.text.x = element_text(size = 8)),
                             seq_combinations = NULL,
                             length_seq_combinations = 2,
@@ -101,6 +103,10 @@ Thinning_BreedR <- function(BV_Column = "a_total",
   
   if (!nGroups %in% 2:4) {
     stop("nGroups should be: 2, 3 or 4")
+  }
+  
+  if (any(!finfl_Value %in% c("max", "min"))) {
+    stop("finfl_value should be a vector of lenght 2 of: 'max' or 'min'")
   }
   
   BV_fam <- BV_fam |>
@@ -147,7 +153,12 @@ Thinning_BreedR <- function(BV_Column = "a_total",
     plots = F,
   )
   
-  Inflexi_major <- max(Inflex1$finfl, na.rm = T)
+  if (finfl_Value[1] == "max") {
+    Inflexi_major <- max(Inflex1$finfl, na.rm = T)
+  } else {
+    Inflexi_major <- min(Inflex1$finfl, na.rm = T)
+  }
+  
   
   # Found inflexion point in the worst families
   Inflex2 <- RootsExtremaInflections::inflexi(
@@ -159,7 +170,12 @@ Thinning_BreedR <- function(BV_Column = "a_total",
     plots = F,
   )
   
-  Inflexi_minor <- Fam_Zero + max(Inflex2$finfl, na.rm = T)
+  if (finfl_Value[2] == "max") {
+    Inflexi_minor <- Fam_Zero + max(Inflex2$finfl, na.rm = T)
+  } else {
+    Inflexi_minor <- Fam_Zero + min(Inflex2$finfl, na.rm = T)
+  }
+  
   Col1 = "gray70"
   Col2 = "blue"
   Col3 = "red"
