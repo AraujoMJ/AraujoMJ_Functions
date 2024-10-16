@@ -118,8 +118,13 @@ Thinning_BreedR <- function(BV_Column = "a_total",
       arrange(desc(get(BV_Column))) |>
       mutate(Family = factor(Family, levels = Family))
     print("Processed BV_fam data frame.")
+  }, error = function(e) {
+    print(paste("Error processing BV_fam data frame:", e$message))
+    stop(e)
+  })
     
-    # Merge Data_Total and BV data
+  # Merge Data_Total and BV_fam
+  tryCatch({
     print("Merging Data_Total and BV_fam...")
     Data_Total <- Data_Total |> 
       mutate(
@@ -134,19 +139,27 @@ Thinning_BreedR <- function(BV_Column = "a_total",
         by = "Family"
       )
     print("Data merged successfully.")
+  }, error = function(e) {
+    print(paste("Error merging Data_Total and BV_fam:", e$message))
+    stop(e)
+  })
     
-    # Finding positive BV families
+  # Identify families with positive BV
+  tryCatch({
     print("Identifying families with positive BV...")
     MajorBV_fam <- BV_fam |>
       filter(get(BV_Column) >= 0)
-    
-    # Identify families close to zero and negative BVs
-    print("Finding families near zero BV...")
     Fam_Zero <- which.min(MajorBV_fam[[BV_Column]])
     MinorBV_fam <- BV_fam |>
       filter(get(BV_Column) < 0)
-    
-    # Inflection points for best and worst families
+    print("Families identified.")
+  }, error = function(e) {
+    print(paste("Error identifying families with positive BV:", e$message))
+    stop(e)
+  })
+
+  # Inflection points for best families
+  tryCatch({
     print("Finding inflection points for best families...")
     Inflex1 <- RootsExtremaInflections::inflexi(
       x = 1:nrow(MajorBV_fam),
@@ -159,12 +172,18 @@ Thinning_BreedR <- function(BV_Column = "a_total",
     )
     
     if (finfl_Value[1] == "max") {
-      Inflexi_major <- max(Inflex1$finfl, na.rm = T)
+      Inflexi_major <- max(Inflex1$finfl, na.rm = TRUE)
     } else {
-      Inflexi_major <- min(Inflex1$finfl, na.rm = T)
+      Inflexi_major <- min(Inflex1$finfl, na.rm = TRUE)
     }
     print(paste("Inflexi_major:", Inflexi_major))
-    
+  }, error = function(e) {
+    print(paste("Error finding inflection points for best families:", e$message))
+    stop(e)
+  })
+  
+  # Inflection points for worst families
+  tryCatch({
     print("Finding inflection points for worst families...")
     Inflex2 <- RootsExtremaInflections::inflexi(
       x = 1:nrow(MinorBV_fam),
@@ -177,12 +196,19 @@ Thinning_BreedR <- function(BV_Column = "a_total",
     )
     
     if (finfl_Value[2] == "max") {
-      Inflexi_minor <- Fam_Zero + max(Inflex2$finfl, na.rm = T)
+      Inflexi_minor <- Fam_Zero + max(Inflex2$finfl, na.rm = TRUE)
     } else {
-      Inflexi_minor <- Fam_Zero + min(Inflex2$finfl, na.rm = T)
+      Inflexi_minor <- Fam_Zero + min(Inflex2$finfl, na.rm = TRUE)
     }
     print(paste("Inflexi_minor:", Inflexi_minor))
-    
+  }, error = function(e) {
+    print(paste("Error finding inflection points for worst families:", e$message))
+    stop(e)
+  })
+  
+  # Setting up plot groups and annotations
+  tryCatch({
+    print("Setting up plot groups and annotations...")  
     Col1 = "gray70"
     Col2 = "blue"
     Col3 = "red"
@@ -328,8 +354,15 @@ Thinning_BreedR <- function(BV_Column = "a_total",
         )
       }
     }
-    
-    # Plot BV vs Rank from BV
+    print("Plot groups and annotations set.")
+  }, error = function(e) {
+    print(paste("Error in plot group setup:", e$message))
+    stop(e)
+  })
+  
+  # Prepare the family ranking plot
+  tryCatch({
+    print("Preparing the family ranking plot...")
     families_rank <-
       ggplot(BV_fam, aes(x = Family, y = get(BV_Column))) +
       geom_point(size = 2) +
@@ -353,9 +386,17 @@ Thinning_BreedR <- function(BV_Column = "a_total",
         )
       )
     if (Plot.Rank == TRUE) {
+      print("Displaying plot...")
       plot(families_rank + additional_layer_plot1)
     }
-    
+    print("Family ranking plot prepared successfully.")
+  }, error = function(e) {
+    print(paste("Error in preparing the family ranking plot:", e$message))
+    stop(e)
+  })
+  # Prepare Data_Total groups
+  tryCatch({
+    print("Preparing Data_Total groups...")
     # Map group for trees in dataset that have BV and experiment information
     Data_Total$Group <- NA
     
@@ -410,7 +451,13 @@ Thinning_BreedR <- function(BV_Column = "a_total",
     #   )))
     
     # Combination for thinning strategies
-    
+    print("Data_Total groups prepared successfully.")
+  }, error = function(e) {
+    print(paste("Error in preparing Data_Total groups:", e$message))
+    stop(e)
+  })
+  tryCatch({
+    print("Configuring thinning strategy combinations...")
     if (STP == TRUE) {
       if (is.null(seq_combinations)) {
         nRep <- length(unique(Data_Total[[Bloc_Column]]))
@@ -472,7 +519,14 @@ Thinning_BreedR <- function(BV_Column = "a_total",
       rownames(AllComb) <- seq.int(nrow(AllComb))
     }
     
-    
+    print("Thinning strategy combinations configured.")
+  }, error = function(e) {
+    print(paste("Error in thinning strategy configuration:", e$message))
+    stop(e)
+  })
+  
+  tryCatch({
+  print("Running BW strategies and collecting results...")
     # Mutate Family_Data_Total and eliminate missing data
     Data_Total <- Data_Total |>
       mutate(Family = as.character(get(Family_Data_Total))) |> 
@@ -518,7 +572,10 @@ Thinning_BreedR <- function(BV_Column = "a_total",
     }
     # Set names in the strategies
     G.BW <- setNames(G.BW, as.character(seq_along(G.BW)))
-    
+  }, error = function(e) {
+    print(paste("Error in preparing BW strategies:", e$message))
+    stop(e)
+  }) 
     # BI Strategies: Selection of the best individuals regardless of family that he belongs
     ## Second group strategy
     if (is.null(IS)) {
@@ -531,6 +588,8 @@ Thinning_BreedR <- function(BV_Column = "a_total",
       IC.TOP <- IS
     }
     
+  tryCatch({
+    print("Running BI strategies and collecting results...")
     SeleTop.BI <- list()
     for (i in seq_along(IC.TOP)) {
       seletop <- Data_Total %>%
@@ -543,8 +602,13 @@ Thinning_BreedR <- function(BV_Column = "a_total",
     }
     SeleTop.BI <-
       setNames(SeleTop.BI, as.character(seq(1 + length(G.BW), (length(G.BW) + length(SeleTop.BI)))))
-    
-    # Combining BW and BI strategies
+  }, error = function(e) {
+    print(paste("Error in preparing BI strategies:", e$message))
+    stop(e)
+  })
+  
+  tryCatch({
+    print("Combining BW and BI strategies...")
     Strategies <- append(G.BW, SeleTop.BI)
     
     AllComb2 <- AllComb
@@ -564,8 +628,14 @@ Thinning_BreedR <- function(BV_Column = "a_total",
     for (i in names(Strategies)) {
       Strategies[[i]][["N_Strategy"]] <- i
     }
-    
+  }, error = function(e) {
+    print(paste("Error in combining BW and BI strategies:", e$message))
+    stop(e)
+  })
     # Effective Number (NE) and Genetic Gain with selection (GS)
+  
+  tryCatch({
+    print("Calculating NE and GS...")
     GS.NE <- list()
     for (i in seq_along(Strategies)) {
       # GS
@@ -606,7 +676,13 @@ Thinning_BreedR <- function(BV_Column = "a_total",
     }
     GS.NE <- bind_rows(GS.NE)
     #GS.NE
-    
+  }, error = function(e) {
+    print(paste("Error in calculate NE and GS:", e$message))
+    stop(e)
+  })
+  
+  tryCatch({
+    print("Summarise thinning strategies...")
     # Summarise thinning strategies
     suppressMessages(
       nFam_Strategy <- bind_rows(Strategies) |>
@@ -622,12 +698,17 @@ Thinning_BreedR <- function(BV_Column = "a_total",
           values_fill = 0
         )
     )
-    
+  
     BV_fam <- left_join(BV_fam,
                         Data_Total[match(BV_fam$Family, Data_Total$Family), ] |>
                           dplyr::select(Family, Group),
                         by = "Family")
-    
+  }, error = function(e) {
+    print(paste("Error in summarise thinning strategies:", e$message))
+  })
+  
+  tryCatch({
+    print("Building the final table with thinning strategies...")
     # Final table with thinning strategies
     Thinning <- left_join(GS.NE, nFam_Strategy, by = "N_Strategy") |>
       cbind(AllComb2)
@@ -638,7 +719,13 @@ Thinning_BreedR <- function(BV_Column = "a_total",
       Thinning,
       by = c("N_Strategy", "N_Progeny")
     )
-    
+  }, error = function(e){
+    print(paste("Error in building the final table with thinning strategies:", e$message))
+    stop(e)
+  })
+  
+  tryCatch({
+    print("Saving results...")
     if (save_table_xlsx == TRUE) {
       require(openxlsx)
       write.xlsx(
@@ -675,7 +762,10 @@ Thinning_BreedR <- function(BV_Column = "a_total",
     if (save_plot_rank == TRUE) {
       ggsave(filename = paste0("families_rank_", export_id, format_plot), plot = families_rank)
     }
-    
+  }, error = function(e) {
+    print(paste("Error in saving results:", e$message))
+    stop(e)
+  })
     return(
       list(
         Thinning = Thinning,
@@ -684,12 +774,6 @@ Thinning_BreedR <- function(BV_Column = "a_total",
         ggPlot_families_rank = families_rank
       )
     )
-    
-  }, error = function(e) {
-    # Detailed error message for tracking
-    print(paste("Error inside Thinning_BreedR: ", e$message))
-    stop(e)
-  })
   
   print("Finished running Thinning_BreedR function.")
 }
