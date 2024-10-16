@@ -684,8 +684,7 @@ Thinning_BreedR <- function(BV_Column = "a_total",
   tryCatch({
     print("Summarise thinning strategies...")
     # Summarise thinning strategies
-    suppressMessages(
-      nFam_Strategy <- bind_rows(Strategies) |>
+    nFam_Strategy <- bind_rows(Strategies) |>
         data.frame() |>
         mutate(N_Strategy = as.numeric(N_Strategy)) |>
         group_by(N_Strategy, Group) |>
@@ -696,7 +695,6 @@ Thinning_BreedR <- function(BV_Column = "a_total",
           values_from = nFam,
           names_prefix = "nFam.",
           values_fill = 0
-        )
     )
   
     BV_fam <- left_join(BV_fam,
