@@ -88,8 +88,11 @@ Thinning_BreedR <- function(BV_Column = "a_total",
                             length_seq_combinations = 2,
                             save_table_xlsx = TRUE,
                             export_id = "",
-                            format_plot = ".tiff") {
-  print("Starting Thinning_BreedR function...")
+                            format_plot = ".tiff",
+                            verbose = FALSE) {
+  if (verbose) {
+    message("Starting Thinning_BreedR function...")
+  }
   
   # Check if necessary packages are loaded
   if (!require("RootsExtremaInflections")) {
@@ -112,12 +115,18 @@ Thinning_BreedR <- function(BV_Column = "a_total",
   # Start of main function logic
   tryCatch({
     # Process BV_fam data frame
-    print("Processing BV_fam data frame...")
+    if (verbose) {
+      message("Processing BV_fam data frame...")
+    }
+    
     BV_fam <- BV_fam |>
       rename_with(~ "Family", all_of(Family_Column)) |> 
       arrange(desc(get(BV_Column))) |>
       mutate(Family = factor(Family, levels = Family))
-    print("Processed BV_fam data frame.")
+    if (verbose) {
+      message("Processed BV_fam data frame.")
+    }
+    
   }, error = function(e) {
     print(paste("Error processing BV_fam data frame:", e$message))
     stop(e)
@@ -125,7 +134,10 @@ Thinning_BreedR <- function(BV_Column = "a_total",
     
   # Merge Data_Total and BV_fam
   tryCatch({
-    print("Merging Data_Total and BV_fam...")
+    if (verbose) {
+      message("Merging Data_Total and BV_fam...")
+    }
+    
     Data_Total <- Data_Total |> 
       mutate(
         Family = get(Family_Data_Total)
@@ -138,7 +150,10 @@ Thinning_BreedR <- function(BV_Column = "a_total",
           ),
         by = "Family"
       )
-    print("Data merged successfully.")
+    if (verbose) {
+      message("Data merged successfully.")
+    }
+    
   }, error = function(e) {
     print(paste("Error merging Data_Total and BV_fam:", e$message))
     stop(e)
@@ -146,13 +161,20 @@ Thinning_BreedR <- function(BV_Column = "a_total",
     
   # Identify families with positive BV
   tryCatch({
-    print("Identifying families with positive BV...")
+    if (verbose) {
+      message("Identifying families with positive BV...")
+    }
+    
     MajorBV_fam <- BV_fam |>
       filter(get(BV_Column) >= 0)
     Fam_Zero <- which.min(MajorBV_fam[[BV_Column]])
     MinorBV_fam <- BV_fam |>
       filter(get(BV_Column) < 0)
-    print("Families identified.")
+    
+    if (verbose) {
+      message("Families identified.")
+    }
+    
   }, error = function(e) {
     print(paste("Error identifying families with positive BV:", e$message))
     stop(e)
@@ -160,7 +182,10 @@ Thinning_BreedR <- function(BV_Column = "a_total",
 
   # Inflection points for best families
   tryCatch({
-    print("Finding inflection points for best families...")
+    if (verbose) {
+      message("Finding inflection points for best families...")
+    }
+    
     Inflex1 <- RootsExtremaInflections::inflexi(
       x = 1:nrow(MajorBV_fam),
       y = MajorBV_fam[[BV_Column]],
@@ -176,7 +201,8 @@ Thinning_BreedR <- function(BV_Column = "a_total",
     } else {
       Inflexi_major <- min(Inflex1$finfl, na.rm = TRUE)
     }
-    print(paste("Inflexi_major:", Inflexi_major))
+    
+    message(paste("Inflexi_major:", Inflexi_major))
   }, error = function(e) {
     print(paste("Error finding inflection points for best families:", e$message))
     stop(e)
@@ -184,7 +210,10 @@ Thinning_BreedR <- function(BV_Column = "a_total",
   
   # Inflection points for worst families
   tryCatch({
-    print("Finding inflection points for worst families...")
+    if (verbose) {
+      message("Finding inflection points for worst families...")
+    }
+   
     Inflex2 <- RootsExtremaInflections::inflexi(
       x = 1:nrow(MinorBV_fam),
       y = MinorBV_fam[[BV_Column]],
@@ -200,7 +229,7 @@ Thinning_BreedR <- function(BV_Column = "a_total",
     } else {
       Inflexi_minor <- Fam_Zero + min(Inflex2$finfl, na.rm = TRUE)
     }
-    print(paste("Inflexi_minor:", Inflexi_minor))
+    message(paste("Inflexi_minor:", Inflexi_minor))
   }, error = function(e) {
     print(paste("Error finding inflection points for worst families:", e$message))
     stop(e)
@@ -208,7 +237,10 @@ Thinning_BreedR <- function(BV_Column = "a_total",
   
   # Setting up plot groups and annotations
   tryCatch({
-    print("Setting up plot groups and annotations...")  
+    if (verbose) {
+      message("Setting up plot groups and annotations...")  
+    }
+    
     Col1 = "gray70"
     Col2 = "blue"
     Col3 = "red"
@@ -354,7 +386,10 @@ Thinning_BreedR <- function(BV_Column = "a_total",
         )
       }
     }
-    print("Plot groups and annotations set.")
+    if (verbose) {
+      message("Plot groups and annotations set.")
+    }
+    
   }, error = function(e) {
     print(paste("Error in plot group setup:", e$message))
     stop(e)
@@ -362,7 +397,10 @@ Thinning_BreedR <- function(BV_Column = "a_total",
   
   # Prepare the family ranking plot
   tryCatch({
-    print("Preparing the family ranking plot...")
+    if (verbose) {
+      message("Preparing the family ranking plot...")
+    }
+    
     families_rank <-
       ggplot(BV_fam, aes(x = Family, y = get(BV_Column))) +
       geom_point(size = 2) +
@@ -386,17 +424,27 @@ Thinning_BreedR <- function(BV_Column = "a_total",
         )
       )
     if (Plot.Rank == TRUE) {
-      print("Displaying plot...")
+      if (verbose) {
+        message("Displaying plot...")
+      }
+      
       plot(families_rank + additional_layer_plot1)
     }
-    print("Family ranking plot prepared successfully.")
+    
+    if (verbose) {
+      message("Family ranking plot prepared successfully.")
+    }
+    
   }, error = function(e) {
     print(paste("Error in preparing the family ranking plot:", e$message))
     stop(e)
   })
   # Prepare Data_Total groups
   tryCatch({
-    print("Preparing Data_Total groups...")
+    if (verbose) {
+      message("Preparing Data_Total groups...")
+    }
+    
     # Map group for trees in dataset that have BV and experiment information
     Data_Total$Group <- NA
     
@@ -451,13 +499,19 @@ Thinning_BreedR <- function(BV_Column = "a_total",
     #   )))
     
     # Combination for thinning strategies
-    print("Data_Total groups prepared successfully.")
+    if (verbose) {
+      message("Data_Total groups prepared successfully.")
+    }
+    
   }, error = function(e) {
     print(paste("Error in preparing Data_Total groups:", e$message))
     stop(e)
   })
   tryCatch({
-    print("Configuring thinning strategy combinations...")
+    if (verbose) {
+      message("Configuring thinning strategy combinations...")
+    }
+    
     if (STP == TRUE) {
       if (is.null(seq_combinations)) {
         nRep <- length(unique(Data_Total[[Bloc_Column]]))
@@ -519,14 +573,20 @@ Thinning_BreedR <- function(BV_Column = "a_total",
       rownames(AllComb) <- seq.int(nrow(AllComb))
     }
     
-    print("Thinning strategy combinations configured.")
+    if (verbose) {
+      message("Thinning strategy combinations configured.")
+    }
+    
   }, error = function(e) {
     print(paste("Error in thinning strategy configuration:", e$message))
     stop(e)
   })
   
   tryCatch({
-  print("Running BW strategies and collecting results...")
+    if (verbose) {
+      message("Running BW strategies and collecting results...")
+    }
+  
     # Mutate Family_Data_Total and eliminate missing data
     Data_Total <- Data_Total |>
       mutate(Family = as.character(get(Family_Data_Total))) |> 
@@ -589,7 +649,10 @@ Thinning_BreedR <- function(BV_Column = "a_total",
     }
     
   tryCatch({
-    print("Running BI strategies and collecting results...")
+    if (verbose) {
+      message("Running BI strategies and collecting results...")
+    }
+    
     SeleTop.BI <- list()
     for (i in seq_along(IC.TOP)) {
       seletop <- Data_Total %>%
@@ -608,7 +671,10 @@ Thinning_BreedR <- function(BV_Column = "a_total",
   })
   
   tryCatch({
-    print("Combining BW and BI strategies...")
+    if (verbose) {
+      message("Combining BW and BI strategies...")
+    }
+    
     Strategies <- append(G.BW, SeleTop.BI)
     
     AllComb2 <- AllComb
@@ -635,7 +701,10 @@ Thinning_BreedR <- function(BV_Column = "a_total",
     # Effective Number (NE) and Genetic Gain with selection (GS)
   
   tryCatch({
-    print("Calculating NE and GS...")
+    if (verbose) {
+      message("Calculating NE and GS...")
+    }
+    
     GS.NE <- list()
     for (i in seq_along(Strategies)) {
       # GS
@@ -682,7 +751,10 @@ Thinning_BreedR <- function(BV_Column = "a_total",
   })
   
   tryCatch({
-    print("Summarise thinning strategies...")
+    if (verbose) {
+      message("Summarise thinning strategies...")
+    }
+    
     # Summarise thinning strategies
     nFam_Strategy <- bind_rows(Strategies) |>
         data.frame() |>
@@ -706,7 +778,10 @@ Thinning_BreedR <- function(BV_Column = "a_total",
   })
   
   tryCatch({
-    print("Building the final table with thinning strategies...")
+    if (verbose) {
+      message("Building the final table with thinning strategies...")
+    }
+    
     # Final table with thinning strategies
     Thinning <- left_join(GS.NE, nFam_Strategy, by = "N_Strategy") |>
       cbind(AllComb2)
@@ -723,7 +798,10 @@ Thinning_BreedR <- function(BV_Column = "a_total",
   })
   
   tryCatch({
-    print("Saving results...")
+    if (verbose) {
+      message("Saving results...")
+    }
+    
     if (save_table_xlsx == TRUE) {
       require(openxlsx)
       write.xlsx(
@@ -772,7 +850,9 @@ Thinning_BreedR <- function(BV_Column = "a_total",
         ggPlot_families_rank = families_rank
       )
     )
+  if (verbose) {
+    message("Finished running Thinning_BreedR function.")
+  }
   
-  print("Finished running Thinning_BreedR function.")
 }
 
