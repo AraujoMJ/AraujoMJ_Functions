@@ -5,13 +5,13 @@ date: "`r Sys.Date()`"
 output:
   bookdown::html_document2:
     code_folding: hide
-    toc: yes
+    toc: no
     toc_depth: '2'
     df_print: paged
     toc_float:
       collapsed: yes
       smooth_scroll: yes
-    number_sections: yes
+    number_sections: no
     fig_caption: yes
     toc-location: left
   html_notebook:
@@ -21,18 +21,39 @@ output:
     toc_float:
       collapsed: yes
       smooth_scroll: yes
-    number_sections: yes
+    number_sections: no
     fig_caption: yes
     toc-location: left
 ---
 
 ```{r, include=FALSE}
 knitr::opts_chunk$set(
-  echo = T,
+  echo = F,
   message = F,
   warning = F
 )
 ```
+
+## Background
+
+In quantitative genetics, selective accuracy is an important metric that measures the reliability of the estimated breeding values (EBVs) or genotypic values (GVs). It quantifies how closely the estimated values reflect the true genetic merit of individuals. This is particularly useful in breeding programs where individuals are selected based on their genetic potential.
+
+Selective accuracy (\(r\)) can be computed using the Prediction Error Variance (PEV) and the genetic variance (\(\sigma^2_g\)). The **PEV** represents the variance of the difference between the true and estimated genetic values, while the **genetic variance** refers to the variance of the breeding values in the population. The relationship between these variables is described by the following formula:
+
+\[
+r = \sqrt{1 - \frac{\text{PEV}}{\sigma^2_g}}
+\]
+
+Where:
+- \(r\) is the selective accuracy.
+- \(\text{PEV}\) is the Prediction Error Variance.
+- \(\sigma^2_g\) is the genetic variance.
+
+The selective accuracy increases as the PEV decreases or as the genetic variance increases, indicating more reliable estimates of genetic merit. 
+
+In this document, we will explore how variations in PEV and genetic variance affect selective accuracy through simulation, using various scenarios for both parameters. This will help us understand the influence of these factors on the accuracy of selection decisions in breeding programs.
+
+
 
 ```{r pct}
 # Load necessary packages
@@ -43,7 +64,7 @@ library(ggplot2)
 ```{r calculation}
 # Function to calculate selective accuracy
 calculate_accuracy <- function(pev, genetic_variance) {
-  sqrt(1 - (pev / genetic_variance))
+  round(sqrt(1 - (pev / genetic_variance)), 2)
 }
 
 # Define ranges for genetic variance and PEV
@@ -64,7 +85,7 @@ for (i in 1:nrow(results)) {
 
 ```{r plot}
 # Create a plot showing the effect of PEV and genetic variance on accuracy
-plot <- ggplot(resultados, aes(x = pev, y = acuracia, color = as.factor(var_genetica))) +
+plot <- ggplot(results, aes(x = pev, y = accuracy, color = as.factor(genetic_variance))) +
   geom_point() +
   geom_line(size = 1) +
   labs(
@@ -87,5 +108,9 @@ plot <- ggplot(resultados, aes(x = pev, y = acuracia, color = as.factor(var_gene
   
 
 plotly::ggplotly(plot)
+```
+
+```{r Final}
+
 ```
 
