@@ -1,0 +1,91 @@
+---
+title: "PEV and genetic variance effects in the accuracia calculation"
+author: "Marcio Araujo"
+date: "`r Sys.Date()`"
+output:
+  bookdown::html_document2:
+    code_folding: hide
+    toc: yes
+    toc_depth: '2'
+    df_print: paged
+    toc_float:
+      collapsed: yes
+      smooth_scroll: yes
+    number_sections: yes
+    fig_caption: yes
+    toc-location: left
+  html_notebook:
+    code_folding: hide
+    toc: yes
+    toc_depth: '2'
+    toc_float:
+      collapsed: yes
+      smooth_scroll: yes
+    number_sections: yes
+    fig_caption: yes
+    toc-location: left
+---
+
+```{r, include=FALSE}
+knitr::opts_chunk$set(
+  echo = T,
+  message = F,
+  warning = F
+)
+```
+
+```{r pct}
+# Load necessary packages
+library(ggplot2)
+
+```
+
+```{r calculation}
+# Function to calculate selective accuracy
+calculate_accuracy <- function(pev, genetic_variance) {
+  sqrt(1 - (pev / genetic_variance))
+}
+
+# Define ranges for genetic variance and PEV
+genetic_variance_seq <- seq(50, 200, by = 25)  # Genetic variance ranging from 50 to 200
+pev_seq <- seq(5, 100, by = 5)                # PEV ranging from 5 to 100
+
+# Create an empty data frame to store the results
+results <- expand.grid(pev = pev_seq, genetic_variance = genetic_variance_seq)
+results$accuracy <- NA
+
+# Calculate accuracy for each combination of PEV and genetic variance
+for (i in 1:nrow(results)) {
+  results$accuracy[i] <- calculate_accuracy(results$pev[i], results$genetic_variance[i])
+}
+
+```
+
+
+```{r plot}
+# Create a plot showing the effect of PEV and genetic variance on accuracy
+plot <- ggplot(resultados, aes(x = pev, y = acuracia, color = as.factor(var_genetica))) +
+  geom_point() +
+  geom_line(size = 1) +
+  labs(
+    title = "Effect of PEV and Genetic Variance on Selective Accuracy",
+    x = "PEV (Prediction Error Variance)",
+    y = "Selective Accuracy",
+    color = "Genetic Variance"
+  ) +
+  geom_hline(
+    yintercept = 0.8,
+    linetype = "dashed",
+    linewidth = 0.1
+    
+  ) +
+  scale_color_viridis_d() +
+  theme_classic() +
+  guides(
+    color = guide_legend(reverse = TRUE)
+  )
+  
+
+plotly::ggplotly(plot)
+```
+
