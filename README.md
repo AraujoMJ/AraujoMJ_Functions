@@ -58,12 +58,16 @@ The `Thinning_BreedR` function has been developed for use in tree breeding strat
 
 2.  [Conservative or non-conservative strategy to advance breeding generation? A case study in *Eucalyptus benthamii* using spatial variation and competition model](https://sciendo.com/pdf/10.2478/sg-2023-0001) (Araujo et al. 2023).
 
+3.  [Thinning Strategies to Optimize Genetic Gain and Population Size in *Eucalyptus pellita* Breeding](https://link.springer.com/article/10.1007/s11295-024-01674-6) (Silva et al. 2024).
+
 # Reference
 
-Araujo, Marcio José de, Rinaldo Cesar de Paula, Cristiano Bueno de Moraes, Gustavo Pieroni, and Paulo Henrique Müller da Silva. 2021. \"Thinning Strategies for Eucalyptus Dunnii Population: Balance Between Breeding and Conservation Using Spatial Variation and Competition Model.\" *Tree Genetics & Genomes* 17 (5). <https://doi.org/10.1007/s11295-021-01523-w>.
+Araujo, Marcio José de, Rinaldo Cesar de Paula, Cristiano Bueno de Moraes, Gustavo Pieroni, and Paulo Henrique Müller da Silva. 2021. "Thinning Strategies for Eucalyptus Dunnii Population: Balance Between Breeding and Conservation Using Spatial Variation and Competition Model." *Tree Genetics & Genomes* 17 (5). <https://doi.org/10.1007/s11295-021-01523-w>.
 
-Araujo, Marcio José de, Guilherme Nichele da Rocha, Regiane Abjaud Estopa, Javier Oberschelp, and Paulo Henrique Müller da Silva. 2023. \"Conservative or Non-Conservative Strategy to Advance Breeding Generation? A Case Study in *Eucalyptus Benthamii* Using Spatial Variation and Competition Model.\" *Silvae Genetica* 72 (1): 1--10. <https://doi.org/10.2478/sg-2023-0001>.
+Araujo, Marcio José de, Guilherme Nichele da Rocha, Regiane Abjaud Estopa, Javier Oberschelp, and Paulo Henrique Müller da Silva. 2023. "Conservative or Non-Conservative Strategy to Advance Breeding Generation? A Case Study in *Eucalyptus Benthamii* Using Spatial Variation and Competition Model." *Silvae Genetica* 72 (1): 1--10. <https://doi.org/10.2478/sg-2023-0001>.
 
-Kuznetsova, Alexandra, Per B. Brockhoff, and Rune H. B. Christensen. 2017. \"lmerTest Package: Tests in Linear Mixed Effects Models\" 82. <https://doi.org/10.18637/jss.v082.i13>.
+Kuznetsova, Alexandra, Per B. Brockhoff, and Rune H. B. Christensen. 2017. "lmerTest Package: Tests in Linear Mixed Effects Models" 82. <https://doi.org/10.18637/jss.v082.i13>.
 
-Muñoz, Facundo, and Leopoldo Sanchez. 2020. \"breedR: Statistical Methods for Forest Genetic Resources Analysts.\" <https://github.com/famuvie/breedR>.
+Muñoz, Facundo, and Leopoldo Sanchez. 2020. "breedR: Statistical Methods for Forest Genetic Resources Analysts." <https://github.com/famuvie/breedR>.
+
+Silva, Paulo Henrique Muller, Rocha, Guilherme Nichele, Araujo, Marcio. *et al.* Thinning Strategies to Optimize Genetic Gain and Population Size in *Eucalyptus pellita* Breeding. *Tree Genetics & Genomes* **20**, 43 (2024). <https://doi.org/10.1007/s11295-024-01674-6>
