@@ -650,7 +650,7 @@ DiagFunc <-
     Discrepantes <- suppressMessages(anti_join(data1, data2))
     
     # Create a column with transformed data
-    data2[[paste0(Trait, "_transformed")]] <- TraitT
+    data2[[paste0(Trait, "_transformed")]] <- data2$TraitT
     
     if (verbose == TRUE) {
       print(
