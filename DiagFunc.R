@@ -13,7 +13,7 @@ DiagFunc <-
            Title.plot_diag2 = "\nAfter removal of discrepant data",
            plotBox1 = TRUE,
            lambda.boxcox = c(0.9, 1.1),
-           # Número de análises realizadas simultaneamente
+           # Number of analysis performed simultaneously
            nDiag = 3,
            verbose = FALSE,
            # Column names to return
@@ -44,7 +44,7 @@ DiagFunc <-
     
     pacman::p_load(MASS, lmerTest, nortest, car, moments, Hmisc, tidyverse)
     
-    ColumnNames_To_Return <- c(ColumnNames_To_Return, Trait)
+    ColumnNames_To_Return <- c(ColumnNames_To_Return)
     
     if (is.null(Rep)) {
       data1$REP <- 1
@@ -649,6 +649,8 @@ DiagFunc <-
     
     Discrepantes <- suppressMessages(anti_join(data1, data2))
     
+    # Create a column with transformed data
+    data2[[paste0(Trait, "_transformed")]] <- TraitT
     
     if (verbose == TRUE) {
       print(
@@ -669,7 +671,7 @@ DiagFunc <-
     Output <-
       list(
         DataOriginals = data1,
-        DataAfterDiag = data2[, c(ColumnNames_To_Return)],
+        DataAfterDiag = data2[, c(ColumnNames_To_Return, paste0(Trait, "_transformed"))],
         Discrepants = Discrepantes,
         `Normality and Homocedasticity` = list(
           `Normality before diagnostic analysis` = NORMAL1,
