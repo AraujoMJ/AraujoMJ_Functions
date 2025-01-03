@@ -147,6 +147,8 @@ DiagFunc <-
         # Transformando caractere (Trait)
         
         DATA[[i]]$TraitT <- DATA[[i]][["Trait"]] ^ LAMBDA[[i]]
+        
+        T_BoxCox <- TRUE
       }
     }
     data1 <- bind_rows(DATA)
