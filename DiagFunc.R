@@ -492,8 +492,8 @@ DiagFunc <-
       LMAX_YP2 <- list()
       LMIN_YP2 <- list()
       
-      if (max(MOD[[i]]$rs, na.rm = T) > 3 |
-          min(MOD[[i]]$rs, na.rm = T) < -3) {
+      if (max(MOD2[[i]]$rs, na.rm = T) > 3 |
+          min(MOD2[[i]]$rs, na.rm = T) < -3) {
         DI2 <- Title.plot_diag2
       } else {
         DI2 <- ""
@@ -516,7 +516,7 @@ DiagFunc <-
           sub = SUBt[[i]]
         )
         xm <-
-          seq(min(MOD[[i]]$rs, na.rm = T), max(MOD[[i]]$rs, na.rm = T), length = 40)
+          seq(min(MOD2[[i]]$rs, na.rm = T), max(MOD2[[i]]$rs, na.rm = T), length = 40)
         ym <- dnorm(xm)
         lines(xm, ym)
         
