@@ -12,7 +12,7 @@ DiagFunc <-
            Title.plot_diag1 = "\nBefore removal of discrepant data",
            Title.plot_diag2 = "\nAfter removal of discrepant data",
            plotBox1 = TRUE,
-           lambda.boxcox = c(0.9, 1.1),
+           lambda.boxcox = NULL,
            # Number of analysis performed simultaneously
            nDiag = 3,
            verbose = FALSE,
@@ -63,6 +63,7 @@ DiagFunc <-
     FIT <- list()
     BOX <- list()
     LAMBDA <- list()
+    CONF.INTERVAL <- list()
     DATA <- list()
     MODEL <- list()
     for (i in unique(unlist(data1[["Exp"]]))) {
@@ -98,22 +99,43 @@ DiagFunc <-
       box <-
         boxcox(
           MODEL[[i]],
-          lambda = seq(-3, 3, 0.05),
+          lambda = seq(-3, 3, 0.01),
           plotit = F,
           data = DATA[[i]]
         )
-      lambda <- box$x[which(box$y == max(box$y))]
+      # Find the maximum log-likelihood
+      max_log_likelihood <- max(box$y)
+      # Calculate the cutoff value for the confidence interval (95% CI: Quisquare critical value = 3.84)
+      cutoff <- max_log_likelihood - 0.5 * qchisq(0.95, df = 1)
+      # Find lambda values that satisfy the condition for the confidence interval
+      conf_interval <- range(box$x[box$y >= cutoff])
+      # Find the lambda value
+      lambda <- box$x[which(box$y == max_log_likelihood)]
       
       BOX[[i]] <- box
       LAMBDA[[i]] <- lambda
+      CONF.INTERVAL[[i]] <- conf_interval
       
     }
     
-    
+    LAMBDA.COX <- list()
     for (i in unique(unlist(data1[["Exp"]]))) {
+      
+      if (is.null(lambda.boxcox)) {
+        LAMBDA.COX[[i]] <- CONF.INTERVAL[[i]]
+      } else {
+        LAMBDA.COX[[i]] <- lambda.boxcox
+      }
+      
       DATA[[i]]$TraitT <- NA
-      if (BOX[[i]]$x[which(BOX[[i]]$y == max(BOX[[i]]$y))] < lambda.boxcox[1] |
-          BOX[[i]]$x[which(BOX[[i]]$y == max(BOX[[i]]$y))] > lambda.boxcox[2]) {
+      # Check if the value 1 is within the confidence interval
+      if (1 <= min(CONF.INTERVAL[[i]]) && 1 <= max(CONF.INTERVAL[[i]])) {
+        cat(paste0("\nNo transformation is required for ", i," - ", Trait, " ", track_feature, 
+                   track_feature_label, "\n"))
+        DATA[[i]]$TraitT <- DATA[[i]][["Trait"]]
+        #data1 <- bind_rows(DATA)
+        T_BoxCox <- FALSE
+      } else {
         cat(paste0(
           "\nTransformation to ",
           i, " - ", Trait, " ", track_feature, track_feature_label,
@@ -125,15 +147,6 @@ DiagFunc <-
         # Transformando caractere (Trait)
         
         DATA[[i]]$TraitT <- DATA[[i]][["Trait"]] ^ LAMBDA[[i]]
-        # data1 <- bind_rows(DATA)
-        
-        T_BoxCox <- TRUE
-      } else {
-        cat(paste0("\nNo transformation is required for ", i," - ", Trait, " ", track_feature, 
-                   track_feature_label, "\n"))
-        DATA[[i]]$TraitT <- DATA[[i]][["Trait"]]
-        #data1 <- bind_rows(DATA)
-        T_BoxCox <- FALSE
       }
     }
     data1 <- bind_rows(DATA)
@@ -230,7 +243,7 @@ DiagFunc <-
           DI1 <- ""
         }
       }
-        
+      
       # Escrevendo subtítulo nos gráficos
       SUBt <- list()
       for (i in unique(unlist(data1[[Exp]]))) {
@@ -296,8 +309,8 @@ DiagFunc <-
         LMIN_RS[[i]] <- min(MOD[[i]]$rs, -3.0, na.rm = T) - 0.1
         
         # Armazenando os valores preditos
-        LMAX_YP[[i]] <- max(YP[[i]], na.rm = T) + 0.1
-        LMIN_YP[[i]] <- min(YP[[i]], na.rm = T) - 0.1
+        LMAX_YP[[i]] <- max(YP[[i]], na.rm = T) + max(YP[[i]], na.rm = T) * 0.1
+        LMIN_YP[[i]] <- min(YP[[i]], na.rm = T) - min(YP[[i]], na.rm = T) * 0.1
         
         # Plotando o gráfico
         ## Configurando os eixos e títulos
@@ -351,7 +364,7 @@ DiagFunc <-
       
       # Homocedasticidade
       homoced <- try({leveneTest(TraitT ~ as.factor(get(Trat)),
-                            data = data1)})
+                                 data = data1)})
       HOMOCED1[[i]] <- homoced
       
       if (T_BoxCox == TRUE) {
@@ -462,7 +475,8 @@ DiagFunc <-
                                  MOD2[[i]]$DATA[, paste0("residuals.", Trait)] > 3), colnames(MOD2[[i]]$DATA)]
         
         DISCREPANT[[i]] <- discrepant
-        MOD2[[i]]$DATA[rownames(DISCREPANT[[i]]), "TraitT"] <- NA
+        MOD2[[i]]$DATA[which(MOD2[[i]]$DATA[, paste0("residuals.", Trait)] < -3 |
+                               MOD2[[i]]$DATA[, paste0("residuals.", Trait)] > 3), "TraitT"] <- NA
         # MOD[[i]]$DATA[rownames(DISCREPANT[[i]]), Trait] <- NA
       }
       
@@ -516,7 +530,7 @@ DiagFunc <-
           sub = SUBt[[i]]
         )
         xm <-
-          seq(min(MOD2[[i]]$rs, na.rm = T), max(MOD2[[i]]$rs, na.rm = T), length = 40)
+          seq(min(MOD2[[i]]$rs.n.na, na.rm = T), max(MOD2[[i]]$rs.n.na, na.rm = T), length = 40)
         ym <- dnorm(xm)
         lines(xm, ym)
         
@@ -548,15 +562,15 @@ DiagFunc <-
         
         # Checando presença de valores discrepantes
         # Armazenando yp = Valores preditos
-        YP2[[i]] <- predict(MOD2[[i]]$mod1, na.rm = T)
+        YP2[[i]] <- predict(MOD2[[i]]$mod2, na.rm = T)
         
         # Marcando limites para valores normais
-        LMAX_RS2[[i]] <- max(MOD2[[i]]$rs, 3.0, na.rm = T) + 0.1
-        LMIN_RS2[[i]] <- min(MOD2[[i]]$rs, -3.0, na.rm = T) - 0.1
+        LMAX_RS2[[i]] <- max(MOD2[[i]]$rs.n.na, 3.0, na.rm = T) + 0.1
+        LMIN_RS2[[i]] <- min(MOD2[[i]]$rs.n.na, -3.0, na.rm = T) - 0.1
         
         # Armazenando os valores preditos
-        LMAX_YP2[[i]] <- max(YP2[[i]], na.rm = T) + 0.1
-        LMIN_YP2[[i]] <- min(YP2[[i]], na.rm = T) - 0.1
+        LMAX_YP2[[i]] <- max(YP2[[i]], na.rm = T) + max(YP2[[i]], na.rm = T) * 0.1
+        LMIN_YP2[[i]] <- min(YP2[[i]], na.rm = T) - min(YP2[[i]], na.rm = T) * 0.1
         
         # Plotando o gráfico
         ## Configurando os eixos e títulos
@@ -581,7 +595,7 @@ DiagFunc <-
         abline(h = -3.0, col = "red")
         
         ## Plotando os pontos
-        points(YP2[[i]], MOD2[[i]]$rs)
+        points(YP2[[i]], MOD2[[i]]$rs.n.na)
       }
     } else {
       DI2 <- ""
@@ -607,7 +621,7 @@ DiagFunc <-
       
       # Homocedasticidade
       homoced <- try({leveneTest(TraitT ~ as.factor(get(Trat)),
-                            data = data2)})
+                                 data = data2)})
       HOMOCED2[[i]] <- homoced
       
       if (T_BoxCox == TRUE) {
