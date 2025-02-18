@@ -2,6 +2,7 @@
 .Rhistory
 .RData
 .Ruserdata
+*.Rproj
 # Ignore .nb.html and .html files
 *.nb.html
 *.html
