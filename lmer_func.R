@@ -47,9 +47,13 @@ lmer_func <- function(data = DataDiag,
   ## Get trial names
   trial_names <- unique(data[[Trial_column]])
   Results <- list()
-  
+  # Make all variables as character
+  data <- data |> 
+    mutate_at(
+      all_of(terms), as.character
+    )
   for (i in trial_names) {
-    #i = "EP03EBWK"
+    #i = "EP03EEAA"
     # Fit model
     mod_lmer <- lmer(model_formula, 
                      data = data |> 
@@ -60,7 +64,7 @@ lmer_func <- function(data = DataDiag,
                        mutate(
                          # Convert terms to factors
                          across(
-                           terms, as.factor
+                           all_of(terms), as.factor
                          )
                        ))
     # Extract trait
@@ -71,11 +75,16 @@ lmer_func <- function(data = DataDiag,
     varcomp_lmer <- summary(mod_lmer)$varcor |>
       data.frame() |>
       column_to_rownames(var = "grp")
+    
     n_obs <- data |>
+      filter(get(Trial_column) == i) |> 
       group_by(get(genetic_factor)) |>
-      summarise(n = sum(!is.na(get(trait)))) |>
-      summarise(mean_n = mean(n)) |>
-      pull(mean_n)
+      summarise(n = sum(!is.na(get(trait))))
+    # Load psych package to calculate the harmonic mean
+    require(psych)
+    n_obs <-  psych::harmonic.mean(n_obs$n, zero = FALSE)
+    
+    #weighted.mean(n_obs$n)
     # Extract variance components
     VarComp <- as.data.frame(VarCorr(mod_lmer)) %>%
       dplyr::select(!c("var1", "var2")) %>%
@@ -83,7 +92,7 @@ lmer_func <- function(data = DataDiag,
       `rownames<-`(., .$FV)
     
     Plot <- ifelse(is.null(Plot_column), NA, Plot_column)
-    nRep <- length(unique(data[[Rep_column]]))
+    nRep <- length(unique(subset(data, get(Trial_column) == i)[[Rep_column]]))
     
     GenPar <- tibble(
       Vg = VarComp[genetic_factor, "Variance"],
@@ -124,7 +133,10 @@ lmer_func <- function(data = DataDiag,
         accuracy = sqrt(1 - PEV / GenPar[which(GenPar[["Components"]] == "Vg"), "Estimates"]),
         `overall_mean (u)` = overall_mean
       ) |>
-      rename(`BLUP (a)` = solution)
+      rename(`BLUP (a)` = solution) |> 
+      mutate_at(
+        all_of(genetic_factor), as.character()
+      )
     
     if (survival_calc) {
       # get the survival of clones
