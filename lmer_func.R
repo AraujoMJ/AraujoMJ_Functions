@@ -54,14 +54,16 @@ lmer_func <- function(data = DataDiag,
       all_of(terms), as.character
     )
   for (i in trial_names) {
+    
+    data2 <- data |> 
+      # Filter by trial
+      filter(
+        get(Trial_column) == i
+      ) 
     #i = "EP03EEAA"
     # Fit model
     mod_lmer <- lmer(model_formula, 
-                     data = data |> 
-                       # Filter by trial
-                       filter(
-                         get(Trial_column) == i
-                       ) |> 
+                     data = data2 |> 
                        mutate(
                          # Convert terms to factors
                          across(
@@ -71,13 +73,13 @@ lmer_func <- function(data = DataDiag,
     # Extract trait
     trait <- trimws(gsub("~.*", "", model))
     # Obtain the overall mean
-    overall_mean <- mean(data[[trait]], na.rm = T)
+    overall_mean <- mean(data2[[trait]], na.rm = T)
     # Extract genetic parameter
     varcomp_lmer <- summary(mod_lmer)$varcor |>
       data.frame() |>
       column_to_rownames(var = "grp")
     
-    n_obs <- data |>
+    n_obs <- data2 |>
       filter(get(Trial_column) == i) |> 
       group_by(get(genetic_factor)) |>
       summarise(n = sum(!is.na(get(trait))))
@@ -93,7 +95,7 @@ lmer_func <- function(data = DataDiag,
       `rownames<-`(., .$FV)
     
     Plot <- ifelse(is.null(Plot_column), NA, Plot_column)
-    nRep <- length(unique(subset(data, get(Trial_column) == i)[[Rep_column]]))
+    nRep <- length(unique(subset(data2, get(Trial_column) == i)[[Rep_column]]))
     
     
     if (is_progeny_trial) {
@@ -172,7 +174,7 @@ lmer_func <- function(data = DataDiag,
     
     if (survival_calc) {
       # get the survival of clones
-      survival <- data |>
+      survival <- data2 |>
         filter(get(Trial_column) == i) |> 
         group_by(get(genetic_factor)) |>
         summarise(
