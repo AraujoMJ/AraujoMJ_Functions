@@ -30,7 +30,8 @@ lmer_func <- function(data = DataDiag,
                       random = NULL,
                       survival_calc = TRUE,
                       survival_column = "SR36",
-                      survival_values = c(0, 1)) {
+                      survival_values = c(0, 1),
+                      is_progeny_trial = FALSE) {
   # Prepare data
   ## Clean the string
   cleaned_str <- gsub("\\)", "", gsub("\\(1 \\| ", "", model))
@@ -94,20 +95,38 @@ lmer_func <- function(data = DataDiag,
     Plot <- ifelse(is.null(Plot_column), NA, Plot_column)
     nRep <- length(unique(subset(data, get(Trial_column) == i)[[Rep_column]]))
     
-    GenPar <- tibble(
-      Vg = VarComp[genetic_factor, "Variance"],
-      Vplot = ifelse(!is.null(Plot_column), VarComp[Plot, "Variance"], Plot),
-      Vrandom = ifelse(is.null(random), NA, VarComp[random, "Variance"]),
-      Vres = VarComp["Residual", "Variance"],
-      Vpheno = sum(Vg, Vplot, Vrandom, Vres, na.rm = T),
-      `h2g` = Vg / Vpheno,
-      `h2m` = Vg / sum(Vg, (Vplot / nRep), (Vres / n_obs), na.rm = T),
-      `c2p` = ifelse(is.na(Vplot), NA, Vplot / Vpheno)
-    ) %>%
-      t() %>%
-      as.data.frame() %>%
-      `colnames<-`("Estimates") %>%
-      rownames_to_column(var = "Components")
+    
+    if (is_progeny_trial) {
+      GenPar <- tibble(
+        VFam = VarComp[genetic_factor, "Variance"],
+        Vplot = ifelse(!is.null(Plot_column), VarComp[Plot, "Variance"], Plot),
+        Vrandom = ifelse(is.null(random), NA, VarComp[random, "Variance"]),
+        Vres = VarComp["Residual", "Variance"],
+        Vpheno = sum(VFam, Vplot, Vrandom, Vres, na.rm = T),
+        h2Fam_mean = VFam / sum(VFam, (Vplot / nRep), (Vres / n_obs), na.rm = T),
+        h2a = (4 * VFam) / ( 4 * VFam + sum(Vplot, Vrandom, Vres, na.rm = T)),
+        c2p = ifelse(is.na(Vplot), NA, Vplot / Vpheno)
+      ) %>%
+        t() %>%
+        as.data.frame() %>%
+        `colnames<-`("Estimates") %>%
+        rownames_to_column(var = "Components")
+    } else {
+      GenPar <- tibble(
+        Vg = VarComp[genetic_factor, "Variance"],
+        Vplot = ifelse(!is.null(Plot_column), VarComp[Plot, "Variance"], Plot),
+        Vrandom = ifelse(is.null(random), NA, VarComp[random, "Variance"]),
+        Vres = VarComp["Residual", "Variance"],
+        Vpheno = sum(Vg, Vplot, Vrandom, Vres, na.rm = T),
+        `h2g` = Vg / Vpheno,
+        `h2m` = Vg / sum(Vg, (Vplot / nRep), (Vres / n_obs), na.rm = T),
+        `c2p` = ifelse(is.na(Vplot), NA, Vplot / Vpheno)
+      ) %>%
+        t() %>%
+        as.data.frame() %>%
+        `colnames<-`("Estimates") %>%
+        rownames_to_column(var = "Components")
+    }
     
     ## Extract standard errors for BLUPs
     se_blups <- arm::se.ranef(mod_lmer)[[genetic_factor]] |>
@@ -123,20 +142,33 @@ lmer_func <- function(data = DataDiag,
     ## Combine BLUPs and SEs
     blups_with_se <- left_join(blups, se_blups, by = genetic_factor)
     ## Extract blups
-    blups <- blups_with_se |>
-      mutate(
-        # Calculate the new mean BV + adjusted mean
-        `BLUP_plus_mean (a+u)` = solution + overall_mean,
-        # calculate PEV
-        PEV = SE ^ 2,
-        # Calculate accuracy
-        accuracy = sqrt(1 - PEV / GenPar[which(GenPar[["Components"]] == "Vg"), "Estimates"]),
-        `overall_mean (u)` = overall_mean
-      ) |>
-      rename(`BLUP (a)` = solution) |> 
-      mutate_at(
-        all_of(genetic_factor), as.character()
-      )
+    if (is_progeny_trial) {
+      blups <- blups_with_se |>
+        mutate(
+          # Calculate the new mean BV + adjusted mean
+          `BLUP_plus_mean (a+u)` = solution + overall_mean,
+          # calculate PEV
+          PEV = SE^2,
+          # Calculate accuracy
+          accuracy = sqrt(1 - PEV / GenPar[which(GenPar[["Components"]] == "VFam"), "Estimates"]),
+          `overall_mean (u)` = overall_mean
+        ) |>
+        rename(`BLUP (a)` = solution) |>
+        mutate_at(all_of(genetic_factor), as.character())
+    } else {
+      blups <- blups_with_se |>
+        mutate(
+          # Calculate the new mean BV + adjusted mean
+          `BLUP_plus_mean (g+u)` = solution + overall_mean,
+          # calculate PEV
+          PEV = SE^2,
+          # Calculate accuracy
+          accuracy = sqrt(1 - PEV / GenPar[which(GenPar[["Components"]] == "Vg"), "Estimates"]),
+          `overall_mean (u)` = overall_mean
+        ) |>
+        rename(`BLUP (g)` = solution) |>
+        mutate_at(all_of(genetic_factor), as.character())
+    }
     
     if (survival_calc) {
       # get the survival of clones
@@ -152,10 +184,15 @@ lmer_func <- function(data = DataDiag,
         dplyr::select(-c(Dead, Alive)) |>
         `colnames<-`(c(genetic_factor, "Survival"))
       # Merge with blups
-      blups <- blups |>
-        left_join(survival, by = genetic_factor) |> 
-        arrange(desc(`BLUP (a)`))
-      
+      if (is_progeny_trial) {
+        blups <- blups |>
+          left_join(survival, by = genetic_factor) |> 
+          arrange(desc(`BLUP (a)`))
+      } else {
+        blups <- blups |>
+          left_join(survival, by = genetic_factor) |> 
+          arrange(desc(`BLUP (g)`)) 
+      }
     }
     Results[[i]] <- list(
       GenPar = GenPar,
