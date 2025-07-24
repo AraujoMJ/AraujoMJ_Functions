@@ -1,3 +1,49 @@
+
+#' Thinning_BreedR: Thinning Strategies Based on Genetic Values
+#'
+#' This function implements thinning strategies between and within families based on additive genetic values (BV) 
+#' for a given trait. It identifies family groups with different genetic performance, generates ranking plots, 
+#' and calculates genetic gain (GS) and effective number (NE).
+#'
+#' @param BV_Column Name of the column containing additive genetic values (default = "a_total").
+#' @param Trait Name of the trait of interest.
+#' @param BV_fam Data frame containing genetic values per family.
+#' @param Data_Total Data frame with complete individual data.
+#' @param Family_Data_Total Name of the family column in `Data_Total`.
+#' @param Bloc_Column Name of the experimental block column.
+#' @param Family_Column Name of the family column in `BV_fam`.
+#' @param nGroups Number of groups to form (2, 3, or 4).
+#' @param label.group.y Vector of Y-axis positions for group annotations in the plot.
+#' @param Plot.Rank Logical. If TRUE, plots the family ranking graph.
+#' @param save_plot_rank Logical. If TRUE, saves the ranking plot.
+#' @param IS Vector of selection proportions for the BI (individual) strategy.
+#' @param id Name of the individual ID column.
+#' @param nGroups3 Direction for 3-group split ("left" or "right").
+#' @param STP Logical. If TRUE, treats blocks as experimental units.
+#' @param n.dodge_plot1 Integer. Number of lines for X-axis labels.
+#' @param angle_plot1 Angle of X-axis labels.
+#' @param nt_alpha1 Parameters for inflection detection in best families.
+#' @param nt_alpha2 Parameters for inflection detection in worst families.
+#' @param finfl_Value Vector with "max" or "min" to define inflection points.
+#' @param additional_layer_plot1 Additional ggplot2 layers for the ranking plot.
+#' @param seq_combinations Custom sequence for thinning combinations.
+#' @param length_seq_combinations Length of the thinning combination sequence.
+#' @param save_table_xlsx Logical. If TRUE, saves output tables as Excel files.
+#' @param export_id Suffix for exported file names.
+#' @param format_plot Format of the saved plot (e.g., ".tiff").
+#' @param verbose Logical. If TRUE, prints progress messages.
+#'
+#' @return A list containing:
+#' \describe{
+#'   \item{Thinning}{Final table with thinning strategies, GS, NE, and number of families per group.}
+#'   \item{Strategies}{List of selected individuals per strategy.}
+#'   \item{BV_Fam}{Data frame with families and their assigned groups.}
+#'   \item{ggPlot_families_rank}{Family ranking plot.}
+#' }
+#'
+#' @import dplyr ggplot2 gtools RootsExtremaInflections openxlsx
+#' @export
+
 #---------------------- Function for thinning strategies --------------------------
 Thinning_BreedR <- function(BV_Column = "a_total",
                             Trait = Trait,
@@ -411,11 +457,11 @@ Thinning_BreedR <- function(BV_Column = "a_total",
     
     # G3
     if (nGroups == 3) {
-      Data_Total[Data_Total[, Family_Data_Total] %in% as.vector(BV_fam[(Fam_Zero + 1):nrow(BV_fam), "Family"]), "Group"] <-
+      Data_Total[Data_Total[, Family_Data_Total] %in% levels(unlist(as.vector(BV_fam[(Fam_Zero + 1):nrow(BV_fam), "Family"]))), "Group"] <-
         "G3"
     } else {
       if (nGroups == 4) {
-        Data_Total[Data_Total[, Family_Data_Total] %in% as.vector(BV_fam[(Fam_Zero + 1):Inflexi_minor, "Family"]), "Group"] <-
+        Data_Total[Data_Total[, Family_Data_Total] %in% levels(unlist(as.vector(BV_fam[(Fam_Zero + 1):Inflexi_minor, "Family"]))), "Group"] <-
           "G3"
       }
       
@@ -423,7 +469,7 @@ Thinning_BreedR <- function(BV_Column = "a_total",
     
     # G4
     if (nGroups == 4) {
-      Data_Total[Data_Total[, Family_Data_Total] %in% as.vector(BV_fam[(Inflexi_minor + 1):nrow(BV_fam), "Family"]), "Group"] <-
+      Data_Total[Data_Total[, Family_Data_Total] %in% levels(unlist(as.vector(BV_fam[(Inflexi_minor + 1):nrow(BV_fam), "Family"]))), "Group"] <-
         "G4"
     }
     
