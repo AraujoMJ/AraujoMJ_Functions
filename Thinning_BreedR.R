@@ -457,11 +457,11 @@ Thinning_BreedR <- function(BV_Column = "a_total",
     
     # G3
     if (nGroups == 3) {
-      Data_Total[Data_Total[, Family_Data_Total] %in% levels(unlist(as.vector(BV_fam[(Fam_Zero + 1):nrow(BV_fam), "Family"]))), "Group"] <-
+      Data_Total[Data_Total[, Family_Data_Total] %in% as.vector(BV_fam[(Fam_Zero + 1):nrow(BV_fam), "Family"]), "Group"] <-
         "G3"
     } else {
       if (nGroups == 4) {
-        Data_Total[Data_Total[, Family_Data_Total] %in% levels(unlist(as.vector(BV_fam[(Fam_Zero + 1):Inflexi_minor, "Family"]))), "Group"] <-
+        Data_Total[Data_Total[, Family_Data_Total] %in% as.vector(BV_fam[(Fam_Zero + 1):Inflexi_minor, "Family"]), "Group"] <-
           "G3"
       }
       
@@ -469,7 +469,7 @@ Thinning_BreedR <- function(BV_Column = "a_total",
     
     # G4
     if (nGroups == 4) {
-      Data_Total[Data_Total[, Family_Data_Total] %in% levels(unlist(as.vector(BV_fam[(Inflexi_minor + 1):nrow(BV_fam), "Family"]))), "Group"] <-
+      Data_Total[Data_Total[, Family_Data_Total] %in% as.vector(BV_fam[(Inflexi_minor + 1):nrow(BV_fam), "Family"]), "Group"] <-
         "G4"
     }
     
