@@ -820,6 +820,21 @@ Thinning_BreedR <- function(BV_Column = "a_total",
     stop(e)
   })
   
+  # Checking column names in Strategies files
+  tryCatch({
+    if (verbose) {
+      message("Checking column names of the Strategies list before export...")
+    }
+    #i = "1"
+    for (i in names(Strategies)) {
+      colnames(Strategies[[i]])[duplicated(casefold(colnames(Strategies[[i]])))] <- paste0(
+        colnames(Strategies[[i]])[duplicated(casefold(colnames(Strategies[[i]])))], "_2"
+      )
+    }
+    
+  })
+  
+  
   tryCatch({
     if (verbose) {
       message("Saving results...")
