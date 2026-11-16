@@ -39,6 +39,7 @@
 #' @param target_NE_tol Absolute Ne tolerance, either a scalar or one value per target.
 #' @param n_best_strategies Maximum number of retained strategies per Ne target.
 #' @param max_candidates Maximum number of BW combinations screened.
+#' @param all_scenarios Logical. If TRUE, exhaustively evaluate and retain every BW/BI scenario, ignoring target_NE, max_candidates, and n_best_strategies. Use rebuild_selected = FALSE to avoid retaining all individual records.
 #' @param rebuild_selected Logical. Rebuild full individual-level records only for retained strategies.
 #' @param seed Random seed used when sampling the candidate-combination space.
 #'
@@ -95,6 +96,7 @@ Thinning_BreedR <- function(BV_Column = "a_total",
                             target_NE_tol = 10,
                             n_best_strategies = 20L,
                             max_candidates = 50000L,
+                            all_scenarios = FALSE,
                             rebuild_selected = TRUE,
                             seed = 123L) {
   if (verbose) {
@@ -668,6 +670,8 @@ Thinning_BreedR <- function(BV_Column = "a_total",
         any(!is.finite(target_NE_tol)) || any(target_NE_tol < 0))
       stop("target_NE_tol must contain nonnegative tolerances.")
   }
+  if (length(all_scenarios) != 1L || is.na(all_scenarios) || !is.logical(all_scenarios))
+    stop("all_scenarios must be TRUE or FALSE.")
   if (n_best_strategies < 1 || max_candidates < 1)
     stop("n_best_strategies and max_candidates must be positive.")
   n_best_strategies <- as.integer(n_best_strategies)
@@ -704,79 +708,161 @@ Thinning_BreedR <- function(BV_Column = "a_total",
       unlist(lapply(cells[[k]], utils::head, n = combo[k]), use.names = FALSE)
     }), use.names = FALSE)
   }
-  calc_ne <- function(family) {
-    t <- as.numeric(table(family))
-    N <- sum(t)
+  # In exhaustive mode no Ne filter is applied, and all scenario summaries are kept.
+  if (all_scenarios) {
+    if (!is.null(target_NE)) message("all_scenarios = TRUE: target_NE filtering is disabled.")
+    target_NE <- NULL
+    if (isTRUE(rebuild_selected)) warning("all_scenarios = TRUE with rebuild_selected = TRUE may require considerable memory.")
+  }
+  # Cache the selected-tree counts and cumulative BLUP sums once.
+  # Candidate Ne requires only per-family counts; full data frames are not created.
+  family_levels <- sort(unique(Data_Total$Family))
+  nf <- length(family_levels)
+  fam_index <- match(Data_Total$Family, family_levels)
+  blups <- Data_Total[[blup_col]]
+  nlevels <- length(levels_n)
+  group_count <- vector("list", nGroups)
+  group_sum <- vector("list", nGroups)
+  for (k in seq_len(nGroups)) {
+    cnt <- matrix(0L, nrow = nf, ncol = nlevels)
+    sm <- matrix(0, nrow = nf, ncol = nlevels)
+    for (cell in cells[[k]]) {
+      if (!length(cell)) next
+      fam <- fam_index[cell[1L]]
+      running <- c(0, cumsum(blups[cell]))
+      take <- pmin(length(cell), levels_n)
+      cnt[fam, ] <- cnt[fam, ] + take
+      sm[fam, ] <- sm[fam, ] + running[take + 1L]
+    }
+    group_count[[k]] <- cnt
+    group_sum[[k]] <- sm
+  }
+  # Preserve the previous count-based Ne estimator.
+  calc_ne_counts <- function(counts) {
+    counts <- counts[counts > 0L]
+    N <- sum(counts)
     if (!N) return(NA_real_)
-    nf <- length(t)
-    mean_n <- N / nf
-    var_n <- if (N > 1) sum((t - mean_n)^2) / (N - 1) else 0
-    round(4 * nf * mean_n / (mean_n + 3 + var_n / mean_n), 1)
+    nfamily <- length(counts)
+    avg <- N / nfamily
+    variance <- if (N > 1L) sum((counts - avg)^2) / (N - 1L) else 0
+    round(4 * nfamily * avg / (avg + 3 + variance / avg), 1)
+  }
+  # The filter is based on Ne, so GS is computed only for eligible candidates.
+  matched_target <- function(ne) {
+    if (is.null(target_NE)) return(NA_integer_)
+    eligible <- which(abs(ne - target_NE) <= target_NE_tol)
+    if (!length(eligible)) return(0L)
+    eligible[which.min(abs(ne - target_NE[eligible]))]
   }
   base_trait <- mean(Data_Total[[Trait]], na.rm = TRUE)
-  summary_one <- function(index, kind, key, combo) {
-    if (!length(index)) return(NULL)
-    mean_blup <- mean(Data_Total[[blup_col]][index])
-    ne <- calc_ne(Data_Total$Family[index])
-    if (!is.finite(ne)) return(NULL)
-    gs <- if (abs(base_trait) > .Machine$double.eps)
+  new_record <- function(kind, key, combo, ne, ns, nf_selected, sum_blup,
+                         matched = NA_integer_) {
+    mean_blup <- sum_blup / ns
+    gs <- if (is.finite(base_trait) &&
+              abs(base_trait) > .Machine$double.eps)
       mean_blup / base_trait else NA_real_
-    data.frame(Candidate_ID = key, Strategy = kind, NE = ne,
+    data.frame(
+      Candidate_ID = key, Strategy = kind, NE = ne,
       GS = round(gs, 6), GS_absolute = mean_blup,
-      N_Progeny = length(index), nFamily = length(unique(Data_Total$Family[index])),
+      N_Progeny = ns, nFamily = nf_selected,
       as.list(stats::setNames(combo,
         paste0("nID_fam_plot_G", seq_len(nGroups)))),
-      check.names = FALSE)
+      Target_NE = if (is.na(matched)) NA_real_ else target_NE[matched],
+      NE_Distance = if (is.na(matched)) NA_real_ else abs(ne - target_NE[matched]),
+      check.names = FALSE
+    )
   }
-  # Do not allocate a Cartesian-product matrix or store candidate data frames.
-  ncheck <- as.integer(min(total, max_candidates))
-  if (total > max_candidates) {
-    warning("Sampling candidate combinations; global optimum is not guaranteed.")
+  # Use deterministic exhaustive screening for small search spaces.
+  if (all_scenarios && total > .Machine$integer.max)
+    stop("Exhaustive search exceeds supported integer indexing; restrict seq_combinations or nGroups.")
+  ncheck <- as.integer(if (all_scenarios) total else min(total, max_candidates))
+  if (!all_scenarios && total > max_candidates) {
+    warning("Candidate combinations exceed max_candidates. Sampling does not guarantee global optimality.")
     set.seed(seed)
     codes <- unique(c(seq_len(min(ncheck, 100L)),
                       floor(stats::runif(ncheck * 2L, 0, total)) + 1))
-    codes <- head(codes, ncheck)
-  } else codes <- seq_len(ncheck)
-  rows <- vector("list", length(codes) + 100L)
+    codes <- utils::head(codes, ncheck)
+  } else {
+    codes <- seq_len(ncheck)
+  }
+  rows <- vector("list", length(codes) +
+                   length(if (is.null(IS)) c(seq(.01,.21,.02),.3,.4,.5) else IS))
   nrows <- 0L
+  bw_evaluated <- 0L
+  bw_matched <- 0L
   for (code in codes) {
-    one <- summary_one(select_bw(decode(code)), "BW", paste0("BW_", code), decode(code))
-    if (!is.null(one)) {nrows <- nrows + 1L; rows[[nrows]] <- one}
-  }
-  is_vec <- if (is.null(IS)) c(seq(0.01, 0.21, 0.02), 0.3, 0.4, 0.5) else IS
-  if (any(!is.finite(is_vec)) || any(is_vec <= 0 | is_vec > 1))
-    stop("IS must be proportions in (0,1].")
-  order_bi <- order(-Data_Total[[blup_col]], as.character(Data_Total[[id]]))
-  for (i in seq_along(is_vec)) {
-    n <- max(1L, min(nrow(Data_Total), round(nrow(Data_Total) * is_vec[i])))
-    one <- summary_one(order_bi[seq_len(n)], "BI", paste0("BI_",i),
-                       rep(NA_integer_, nGroups))
-    if (!is.null(one)) {nrows <- nrows + 1L; rows[[nrows]] <- one}
-  }
-  if (!nrows) stop("No valid strategies.")
-  screened <- dplyr::bind_rows(rows[seq_len(nrows)])
-  screened$Target_NE <- NA_real_
-  screened$NE_Distance <- NA_real_
-  if (!is.null(target_NE)) {
-    dist <- abs(outer(screened$NE, target_NE, "-"))
-    keep <- rowSums(sweep(dist, 2L, target_NE_tol, "<=")) > 0L
-    screened <- screened[keep, , drop = FALSE]
-    dist <- dist[keep, , drop = FALSE]
-    if (nrow(screened)) {
-      best <- max.col(-dist, ties.method = "first")
-      screened$Target_NE <- target_NE[best]
-      screened$NE_Distance <- dist[cbind(seq_len(nrow(screened)), best)]
+    combo <- decode(code)
+    lev <- match(combo, levels_n)
+    contributions <- integer(nf)
+    for (k in seq_len(nGroups)) {
+      contributions <- contributions + group_count[[k]][, lev[k]]
     }
+    ns <- sum(contributions)
+    if (!ns) next
+    bw_evaluated <- bw_evaluated + 1L
+    ne <- calc_ne_counts(contributions)
+    matched <- matched_target(ne)
+    if (!is.null(target_NE) && matched == 0L) next
+    bw_matched <- bw_matched + 1L
+    sum_blup <- 0
+    for (k in seq_len(nGroups)) {
+      sum_blup <- sum_blup + sum(group_sum[[k]][, lev[k]])
+    }
+    nrows <- nrows + 1L
+    rows[[nrows]] <- new_record(
+      "BW", paste0("BW_", code), combo, ne, ns,
+      sum(contributions > 0L), sum_blup, matched
+    )
   }
-  if (nrow(screened)) {
-    screened <- screened[order(-screened$GS_absolute, screened$NE_Distance), , drop = FALSE]
-    if (is.null(target_NE)) {
+  # BI selects the highest individual BLUPs across all families.
+  is_vec <- if (is.null(IS)) c(seq(0.01, 0.21, 0.02), 0.3, 0.4, 0.5) else IS
+  if (!is.numeric(is_vec) || any(!is.finite(is_vec)) ||
+      any(is_vec <= 0 | is_vec > 1)) {
+    stop("IS must be selection proportions in (0, 1].")
+  }
+  order_bi <- order(-blups, as.character(Data_Total[[id]]))
+  blup_cumulative <- c(0, cumsum(blups[order_bi]))
+  for (i in seq_along(is_vec)) {
+    ns <- max(1L, min(nrow(Data_Total), round(nrow(Data_Total) * is_vec[i])))
+    counts <- tabulate(fam_index[order_bi[seq_len(ns)]], nbins = nf)
+    ne <- calc_ne_counts(counts)
+    matched <- matched_target(ne)
+    if (!is.null(target_NE) && matched == 0L) next
+    nrows <- nrows + 1L
+    rows[[nrows]] <- new_record(
+      "BI", paste0("BI_", i), rep(NA_integer_, nGroups),
+      ne, ns, sum(counts > 0L), blup_cumulative[ns + 1L], matched
+    )
+  }
+  if (verbose) {
+    message(sprintf(
+      "Candidate screening: BW evaluated=%d; BW matched target Ne=%d; retained summaries=%d",
+      bw_evaluated, bw_matched, nrows
+    ))
+  }
+  if (!nrows) {
+    warning("No candidate strategy matched the requested target Ne range.")
+    screened <- data.frame()
+  } else {
+    screened <- dplyr::bind_rows(rows[seq_len(nrows)])
+    screened <- screened[order(-screened$GS_absolute,
+                               screened$NE_Distance,
+                               screened$Candidate_ID), , drop = FALSE]
+    if (all_scenarios) {
+      # Keep every eligible BW/BI scenario without truncating the ranking.
+    } else if (is.null(target_NE)) {
       screened <- utils::head(screened, n_best_strategies)
     } else {
-      screened <- dplyr::bind_rows(lapply(unique(screened$Target_NE), function(x)
+      screened <- dplyr::bind_rows(lapply(unique(screened$Target_NE), function(x) {
         utils::head(screened[screened$Target_NE == x, , drop = FALSE],
-                    n_best_strategies)))
+                    n_best_strategies)
+      }))
     }
+  }
+  if (!nrow(screened)) {
+    warning("No strategies matched the current selection criteria.")
+    return(list(Thinning = screened, Strategies = list(), BV_Fam = BV_fam,
+                ggPlot_families_rank = families_rank))
   }
   screened$N_Strategy <- seq_len(nrow(screened))
   screened$Trait <- Trait
