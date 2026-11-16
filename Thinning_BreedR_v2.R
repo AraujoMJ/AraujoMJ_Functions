@@ -16,7 +16,7 @@
 #' @param label.group.y Vector of Y-axis positions for group annotations in the plot.
 #' @param Plot.Rank Logical. If TRUE, plots the family ranking graph.
 #' @param save_plot_rank Logical. If TRUE, saves the ranking plot.
-#' @param IS Vector of selection proportions for the BI (individual) strategy.
+#' @param IS Vector of BI proportions; NULL evaluates 1-50% by 1%, 55-100% by 5%.
 #' @param id Name of the individual ID column.
 #' @param nGroups3 Direction for 3-group split ("left" or "right").
 #' @param STP Logical. If TRUE, treats blocks as experimental units.
@@ -46,6 +46,9 @@
 #'   A scalar applies to all groups; a vector supplies group-specific minima.
 #'   Default is one family in G1 and zero in the remaining groups.
 #' @param min_group_trees Minimum selected trees in each group (default zero).
+#' @param bw_selection_unit One of 'auto', 'plot', or 'family'. Auto switches to
+#'   family-level selection for singleton family/plot cells. Plot preserves the
+#'   original per-plot selection semantics.
 #' @param pareto If TRUE, prioritize nondominated GS_absolute vs NE solutions,
 #'   retaining the best remaining feasible solutions only when needed to fill
 #'   n_best_strategies. Full results are available with all_scenarios = TRUE.
@@ -108,7 +111,8 @@ Thinning_BreedR <- function(BV_Column = "a_total",
                             seed = 123L,
                             min_group_families = NULL,
                             min_group_trees = NULL,
-                            pareto = TRUE) {
+                            pareto = TRUE,
+                            bw_selection_unit = "auto") {
   if (verbose) {
     message("Starting Thinning_BreedR function...")
   }
@@ -460,19 +464,39 @@ Thinning_BreedR <- function(BV_Column = "a_total",
     min_group_trees, rep(0L, nGroups), "min_group_trees")
   if (!is.logical(pareto) || length(pareto) != 1L || is.na(pareto))
     stop("pareto must be TRUE or FALSE.")
-  cells <- lapply(groups, function(g) {
-    ix <- which(Data_Total$Group == g)
-    if (!length(ix)) return(list())
-    z <- split(ix, interaction(Data_Total$Family[ix], Data_Total$Plot[ix], drop = TRUE))
-    lapply(z, function(ii) ii[order(-Data_Total[[blup_col]][ii],
-                                       as.character(Data_Total[[id]][ii]))])
-  })
-  names(cells) <- groups
-  # No cell can contribute more trees than its actual size. Larger levels
-  # cause duplicate candidate selections and artificially inflate search cost.
+  if (!is.character(bw_selection_unit) ||
+      length(bw_selection_unit) != 1L ||
+      !bw_selection_unit %in% c("auto", "plot", "family"))
+    stop("bw_selection_unit must be 'auto', 'plot', or 'family'.")
+  make_cells <- function(unit) {
+    z <- lapply(groups, function(g) {
+      ix <- which(Data_Total$Group == g)
+      if (!length(ix)) return(list())
+      key <- if (unit == "family") Data_Total$Family[ix] else
+        interaction(Data_Total$Family[ix], Data_Total$Plot[ix], drop = TRUE)
+      partitions <- split(ix, key, drop = TRUE)
+      lapply(partitions, function(ii) ii[order(
+        -Data_Total[[blup_col]][ii],
+        as.character(Data_Total[[id]][ii]))])
+    })
+    names(z) <- groups
+    z
+  }
+  cells <- make_cells("plot")
   max_cell <- max(0L, unlist(lapply(cells, function(z)
     if (length(z)) max(lengths(z)) else 0L)))
-  if (max_cell < 1L) stop("No usable family/plot cells.")
+  effective_bw_unit <- if (bw_selection_unit == "auto")
+    if (max_cell <= 1L) "family" else "plot" else bw_selection_unit
+  if (effective_bw_unit == "family") {
+    cells <- make_cells("family")
+    max_cell <- max(0L, unlist(lapply(cells, function(z)
+      if (length(z)) max(lengths(z)) else 0L)))
+    if (bw_selection_unit == "auto")
+      message("BW auto mode: singleton family/plot cells detected; ",
+              "using per-family BLUP ranking. Set bw_selection_unit = 'plot' ",
+              "for strict per-plot selection.")
+  }
+  if (max_cell < 1L) stop("No usable BW selection cells.")
   levels_n <- if (is.null(seq_combinations)) {
     c(0L, seq.int(1L, max_cell, by = length_seq_combinations))
   } else c(0L, as.integer(seq_combinations))
@@ -480,9 +504,8 @@ Thinning_BreedR <- function(BV_Column = "a_total",
   if (anyNA(levels_n) || any(levels_n < 0L))
     stop("Invalid selection intensities.")
   if (max_cell == 1L)
-    warning("Each family/plot cell has at most one tree; BW has only ",
-            "0/1 levels per group. Consider reviewing STP, block identifiers ",
-            "or using finer experimental plot identifiers for meaningful BW intensities.")
+    warning("Only 0/1 BW levels are possible. Try bw_selection_unit = 'family' ",
+            "for finer intensities.")
   if (isTRUE(verbose))
     message("BW selection levels: ", paste(levels_n, collapse = ", "),
             "; maximum trees per family/plot cell: ", max_cell)
@@ -607,7 +630,7 @@ Thinning_BreedR <- function(BV_Column = "a_total",
     codes <- seq_len(ncheck)
   }
   rows <- vector("list", length(codes) +
-                   length(if (is.null(IS)) c(seq(.01,.21,.02),.3,.4,.5) else IS))
+                   length(if (is.null(IS)) c(seq(.01,.50,by=.01),seq(.55,1,by=.05)) else IS))
   nrows <- 0L
   bw_evaluated <- 0L
   bw_matched <- 0L
@@ -643,7 +666,7 @@ Thinning_BreedR <- function(BV_Column = "a_total",
     )
   }
   # BI selects the highest individual BLUPs across all families.
-  is_vec <- if (is.null(IS)) c(seq(0.01, 0.21, 0.02), 0.3, 0.4, 0.5) else IS
+  is_vec <- if (is.null(IS)) c(seq(0.01, 0.50, by = 0.01), seq(0.55, 1, by = 0.05)) else IS
   if (!is.numeric(is_vec) || any(!is.finite(is_vec)) ||
       any(is_vec <= 0 | is_vec > 1)) {
     stop("IS must be selection proportions in (0, 1].")
