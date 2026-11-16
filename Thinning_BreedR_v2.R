@@ -597,8 +597,8 @@ Thinning_BreedR <- function(BV_Column = "a_total",
     data.frame(Candidate_ID = key, Strategy = kind, NE = ne,
       GS = round(gs, 6), GS_absolute = mean_blup,
       N_Progeny = length(index), nFamily = length(unique(Data_Total$Family[index])),
-      t(as.data.frame(as.list(stats::setNames(combo,
-        paste0("nID_fam_plot_G", seq_len(nGroups)))))),
+      as.list(stats::setNames(combo,
+        paste0("nID_fam_plot_G", seq_len(nGroups)))),
       check.names = FALSE)
   }
   # Do not allocate a Cartesian-product matrix or store candidate data frames.
