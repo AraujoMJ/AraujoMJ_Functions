@@ -40,7 +40,7 @@
 #' @param n_best_strategies Maximum number of retained strategies per Ne target.
 #' @param max_candidates Maximum number of BW combinations screened.
 #' @param all_scenarios Logical. If TRUE, exhaustively evaluate and retain every BW/BI scenario, ignoring target_NE, max_candidates, and n_best_strategies. Use rebuild_selected = FALSE to avoid retaining all individual records.
-#' @param rebuild_selected Logical. Rebuild full individual-level records only for retained strategies.
+#' @param rebuild_selected Logical. If TRUE, rebuild full records; if FALSE, return compact TreeID/family/group/BLUP records for retained strategies.
 #' @param seed Random seed used when sampling the candidate-combination space.
 #' @param min_group_families Minimum represented families in each G1..Gn group.
 #'   A scalar applies to all groups; a vector supplies group-specific minima.
@@ -181,366 +181,125 @@ Thinning_BreedR <- function(BV_Column = "a_total",
     stop(e)
   })
   
-  # Identify families with positive BV
-  tryCatch({
-    if (verbose) {
-      message("Identifying families with positive, zero and negative BV...")
+  # Identify valid family-rank boundaries and apply the requested inflection rule.
+  # finfl_Value[1] controls the positive-family split and finfl_Value[2]
+  # controls the negative-family split; both refer to ranked family indices.
+  family_values <- BV_fam[[BV_Column]]
+  if (!is.numeric(family_values) || any(!is.finite(family_values)))
+    stop("Family breeding values must be finite numeric values.")
+  n_family <- nrow(BV_fam)
+  n_positive <- sum(family_values >= 0)
+  n_negative <- n_family - n_positive
+  if (n_positive == 0L || n_negative == 0L)
+    stop("The ranked family values must include both nonnegative and negative families.")
+  if (nGroups %in% 3:4 && min(n_positive, n_negative) < 2L)
+    stop("At least two families on each side of zero are needed for inflection-based grouping.")
+  if (!nGroups3 %in% c("left", "right"))
+    stop("nGroups3 must be 'left' or 'right'.")
+  if (length(finfl_Value) != 2L ||
+      anyNA(finfl_Value) || any(!finfl_Value %in% c("min", "max")))
+    stop("finfl_Value must contain exactly two entries, each 'min' or 'max'.")
+
+  inflection_candidates <- function(values, tuning, side) {
+    n <- length(values)
+    if (n < 3L) return(integer())
+    fit <- tryCatch(
+      RootsExtremaInflections::inflexi(
+        x = seq_len(n), y = values, nt = tuning[1L],
+        alpha = tuning[2L], i1 = 1L, i2 = n, plots = FALSE),
+      error = function(e) {
+        warning(sprintf("%s inflection estimation failed: %s",
+                        side, conditionMessage(e)))
+        NULL
+      })
+    if (is.null(fit)) return(integer())
+    candidates <- suppressWarnings(as.numeric(unlist(fit$finfl)))
+    candidates <- sort(unique(as.integer(round(candidates[is.finite(candidates)]))))
+    candidates[candidates >= 1L & candidates < n]
+  }
+  major_candidates <- if (nGroups == 2L) integer() else
+    inflection_candidates(family_values[seq_len(n_positive)], nt_alpha1, "Positive")
+  minor_candidates <- if (nGroups == 2L || (nGroups == 3L && nGroups3 == "left"))
+    integer() else inflection_candidates(
+      family_values[n_positive + seq_len(n_negative)], nt_alpha2, "Negative")
+
+  choose_boundary <- function(candidates, n, rule, side) {
+    if (!length(candidates)) {
+      boundary <- max(1L, min(n - 1L, as.integer(floor(n / 2))))
+      warning(sprintf(
+        "No valid %s inflection candidate; using midpoint rank %d of %d.",
+        side, boundary, n))
+      return(boundary)
     }
-    
-    # Families with positive BV
-    MajorBV_fam <- BV_fam |>
-      filter(get(BV_Column) >= 0)
-    
-    # Families with BV near of zero
-    Fam_Zero <- which.min(MajorBV_fam[[BV_Column]])
-    # Families with negative BV
-    MinorBV_fam <- BV_fam |>
-      filter(get(BV_Column) < 0)
-    
-    if (verbose) {
-      message("Families identified.")
-    }
-    
-  }, error = function(e) {
-    print(paste("Error identifying families with positive BV:", e$message))
-    stop(e)
-  })
-  
-  # Inflection points for best families
-  tryCatch({
-    if (verbose) {
-      message("Finding inflection points for best families...")
-    }
-    
-    # Found inflexion point in the best families
-    Inflex1 <- RootsExtremaInflections::inflexi(
-      x = 1:nrow(MajorBV_fam),
-      y = MajorBV_fam[[BV_Column]],
-      nt = nt_alpha1[1],
-      alpha = nt_alpha1[2],
-      i1 = 1,
-      i2 = nrow(MajorBV_fam),
-      plots = F,
-    )
-    
-    if (finfl_Value[1] == "max") {
-      Inflexi_major <- max(Inflex1$finfl, na.rm = T)
-    } else {
-      Inflexi_major <- min(Inflex1$finfl, na.rm = T)
-    }
-    
-    message(paste("Inflexi_major:", Inflexi_major))
-  }, error = function(e) {
-    print(paste("Error finding inflection points for best families:", e$message))
-    stop(e)
-  })
-  
-  # Inflection points for worst families
-  tryCatch({
-    if (verbose) {
-      message("Finding inflection points for worst families...")
-    }
-    
-    # Found inflexion point in the worst families
-    Inflex2 <- RootsExtremaInflections::inflexi(
-      x = 1:nrow(MinorBV_fam),
-      y = MinorBV_fam[[BV_Column]],
-      nt = nt_alpha2[1],
-      i1 = nt_alpha2[2],
-      i2 = nrow(MinorBV_fam),
-      plots = F,
-    )
-    
-    if (finfl_Value[2] == "max") {
-      Inflexi_minor <- Fam_Zero + max(Inflex2$finfl, na.rm = T)
-    } else {
-      Inflexi_minor <- Fam_Zero + min(Inflex2$finfl, na.rm = T)
-    }
-    
-    message(paste("Inflexi_minor:", Inflexi_minor))
-  }, error = function(e) {
-    print(paste("Error finding inflection points for worst families:", e$message))
-    stop(e)
-  })
-  
-  # Setting up plot groups and annotations
-  tryCatch({
-    if (verbose) {
-      message("Setting up plot groups and annotations...")  
-    }
-    
-    Col1 = "gray70"
-    Col2 = "blue"
-    Col3 = "red"
-    # line in Fam_Zero
-    nGroup2 <-
-      geom_vline(
-        xintercept = Fam_Zero,
-        linetype = 4,
-        colour = Col1,
-        size = 1
-      )
-    # nGroup = 3
-    if (!nGroups3 %in% c("left", "right")) {
-      stop("nGroups3 should be: left or right")
-    }
-    
-    if (nGroups3 == "left") {
-      nGroup3 <-
-        list(
-          geom_vline(
-            xintercept = Fam_Zero,
-            linetype = 4,
-            colour = Col1,
-            size = 1
-          ),
-          geom_vline(
-            xintercept = Inflexi_major,
-            linetype = 4,
-            colour = Col2,
-            size = 1
-          )
-        )
-    } else {
-      nGroup3 <-
-        list(
-          geom_vline(
-            xintercept = Fam_Zero,
-            linetype = 4,
-            colour = Col1,
-            size = 1
-          ),
-          geom_vline(
-            xintercept = Inflexi_minor,
-            linetype = 4,
-            colour = Col2,
-            size = 1
-          )
-        )
-    }
-    
-    # nGroup = 4
-    nGroup4 <-
-      list(
-        geom_vline(
-          xintercept = Fam_Zero,
-          linetype = 4,
-          colour = Col1,
-          size = 1
-        ),
-        geom_vline(
-          xintercept = Inflexi_major,
-          linetype = 4,
-          colour = Col2,
-          size = 1
-        ),
-        geom_vline(
-          xintercept = Inflexi_minor,
-          linetype = 4,
-          colour = Col3,
-          size = 1
-        )
-      )
-    
-    # if 2 groups:
-    if (nGroups ==  2) {
-      nGroupFinal <- nGroup2
-      AnnotateGroup <- list(
-        annotate(
-          "text",
-          x = Fam_Zero / 2,
-          y = label.group.y[1],
-          label = "G1"
-        ),
-        annotate(
-          "text",
-          x = (Fam_Zero + (nrow(BV_fam) - Fam_Zero) / 2),
-          y = label.group.y[2],
-          label = "G2"
-        )
-      )
-    } else {
-      # if 3 groups
-      if (nGroups == 3) {
-        nGroupFinal <- nGroup3
-        AnnotateGroup <- list(
-          annotate(
-            "text",
-            x = Inflexi_major / 2,
-            y = label.group.y[1],
-            label = "G1"
-          ),
-          annotate(
-            "text",
-            x = (Fam_Zero - (Fam_Zero - Inflexi_major) / 2),
-            y = label.group.y[2],
-            label = "G2"
-          ),
-          annotate(
-            "text",
-            x = Inflexi_minor + ( nrow(BV_fam) - Inflexi_minor) / 2,
-            y = label.group.y[3],
-            label = "G3"
-          )
-        )
-      } else {
-        # if 4 Groups
-        nGroupFinal <- nGroup4
-        AnnotateGroup <- list(
-          annotate(
-            "text",
-            x = Inflexi_major / 2,
-            y = label.group.y[1],
-            label = "G1"
-          ),
-          annotate(
-            "text",
-            x = (Fam_Zero - (Fam_Zero - Inflexi_major) / 2),
-            y = label.group.y[2],
-            label = "G2"
-          ),
-          annotate(
-            "text",
-            x = Fam_Zero + (Inflexi_minor - Fam_Zero) / 2,
-            y = label.group.y[3],
-            label = "G3"
-          ),
-          annotate(
-            "text",
-            x = Inflexi_minor + (nrow(BV_fam) - Inflexi_minor) / 2,
-            y = label.group.y[4],
-            label = "G4"
-          )
-        )
-      }
-    }
-    
-    if (verbose) {
-      message("Plot groups and annotations set.")
-    }
-    
-  }, error = function(e) {
-    print(paste("Error in plot group setup:", e$message))
-    stop(e)
-  })
-  
-  # Prepare the family ranking plot
-  tryCatch({
-    if (verbose) {
-      message("Preparing the family ranking plot...")
-    }
-    
-    # Plot BV vs Rank from BV
-    families_rank <-
-      ggplot(BV_fam, aes(x = Family, y = get(BV_Column))) +
-      geom_point(size = 2) +
-      ggtitle(label = paste("Thinning Strategies based on", Trait, "Trait")) +
-      ylab(paste0("Additive genetic effect (", BV_Column, ") from ", Trait, " trait")) + xlab("Families") +
-      geom_hline(
-        yintercept = 0,
-        linetype = "dashed",
-        colour = "gray60",
-        size = 0.5
-      ) +
-      # Add the groups used
-      nGroupFinal +
-      # Annotate
-      AnnotateGroup +
-      # Change x-axis
-      scale_x_discrete(
-        guide = guide_axis(
-          n.dodge = n.dodge_plot1,
-          angle = angle_plot1
-        )
-      )
-    if (Plot.Rank == TRUE) {
-      plot(families_rank + additional_layer_plot1)
-    }
-    
-    if (verbose) {
-      message("Family ranking plot prepared successfully.")
-    }
-    
-  }, error = function(e) {
-    print(paste("Error in preparing the family ranking plot:", e$message))
-    stop(e)
-  })
-  # Prepare Data_Total groups
-  tryCatch({
-    
-    if (verbose) {
-      message("Preparing Data_Total groups...")
-    }
-    # Map group for trees in dataset that have BV and experiment information
-    Data_Total$Group <- NA_character_
-    # Family IDs may be factors in BV_fam and character strings in Data_Total.
-    # Compare normalized character keys without changing the family ranking order.
-    family_group_key <- trimws(as.character(Data_Total[[Family_Data_Total]]))
-    family_rank_key <- trimws(as.character(BV_fam$Family))
-    if (!any(family_group_key %in% family_rank_key)) {
-      stop("No family identifiers overlap between Data_Total and BV_fam. Check Family_Data_Total and Family_Column.")
-    }
-    
-    # G1
-    if (nGroups == 2) {
-      Data_Total[family_group_key %in% family_rank_key[1:Fam_Zero], "Group"] <-
-        "G1"
-    } else {
-      Data_Total[family_group_key %in% family_rank_key[1:Inflexi_major], "Group"] <-
-        "G1"
-    }
-    
-    # G2
-    if (nGroups == 2) {
-      Data_Total[family_group_key %in% family_rank_key[(Fam_Zero + 1):nrow(BV_fam)], "Group"] <-
-        "G2"
-    } else {
-      Data_Total[family_group_key %in% family_rank_key[(Inflexi_major + 1):Fam_Zero], "Group"] <-
-        "G2"
-    }
-    
-    # G3
-    if (nGroups == 3) {
-      Data_Total[family_group_key %in% family_rank_key[(Fam_Zero + 1):nrow(BV_fam)], "Group"] <-
-        "G3"
-    } else {
-      if (nGroups == 4) {
-        Data_Total[family_group_key %in% family_rank_key[(Fam_Zero + 1):Inflexi_minor], "Group"] <-
-          "G3"
-      }
-      
-    }
-    
-    # G4
-    if (nGroups == 4) {
-      Data_Total[family_group_key %in% family_rank_key[(Inflexi_minor + 1):nrow(BV_fam)], "Group"] <-
-        "G4"
-    }
-    
-    # Map Plot
-    if (STP) {
-      Data_Total[["Plot"]] <- Data_Total[[Bloc_Column]]
-    } else {
-      Data_Total[["Plot"]] <- paste0(
-        Data_Total[[Family_Data_Total]], sep = ":", Data_Total[[Bloc_Column]]
-      )
-    }
-    
-    # Data_Total <- Data_Total |>
-    #   mutate(Plot = ifelse(STP == TRUE, get(Bloc_Column), paste0(
-    #     get(Family_Data_Total), sep = ":", get(Bloc_Column)
-    #   )))
-    
-    # Combination for thinning strategies
-    if (verbose) {
-      message("Data_Total groups prepared successfully.")
-    }
-    
-  }, error = function(e) {
-    print(paste("Error in preparing Data_Total groups:", e$message))
-    stop(e)
-  })
-  
+    if (rule == "min") min(candidates) else max(candidates)
+  }
+  major_cut <- if (nGroups == 2L || (nGroups == 3L && nGroups3 == "right"))
+    NA_integer_ else choose_boundary(major_candidates, n_positive,
+                                   finfl_Value[1L], "positive")
+  minor_cut <- if (nGroups == 2L || (nGroups == 3L && nGroups3 == "left"))
+    NA_integer_ else n_positive + choose_boundary(
+      minor_candidates, n_negative, finfl_Value[2L], "negative")
+  cuts <- if (nGroups == 2L) n_positive
+    else if (nGroups3 == "left" && nGroups == 3L)
+      c(major_cut, n_positive)
+    else if (nGroups == 3L) c(n_positive, minor_cut)
+    else c(major_cut, n_positive, minor_cut)
+  cuts <- as.integer(cuts)
+  if (length(cuts) != nGroups - 1L || any(diff(c(0L, cuts, n_family)) <= 0L))
+    stop("Invalid grouping boundaries; check family values and inflection settings.")
+
+  # Use the same boundary vector for plotting and tree group assignment.
+  rank_group <- paste0("G", findInterval(
+    seq_len(n_family) - 0.5, cuts) + 1L)
+  BV_fam$Group <- rank_group
+  rank_families <- trimws(as.character(BV_fam$Family))
+  tree_families <- trimws(as.character(Data_Total[[Family_Data_Total]]))
+  family_index <- match(tree_families, rank_families)
+  if (!any(!is.na(family_index)))
+    stop("No family identifiers overlap between Data_Total and BV_fam.")
+  Data_Total$Group <- rank_group[family_index]
+  if (isTRUE(verbose)) {
+    message("Inflection candidates (positive): ",
+            paste(major_candidates, collapse = ", "))
+    message("Inflection candidates (negative, local ranks): ",
+            paste(minor_candidates, collapse = ", "))
+    message("Selected boundaries: ", paste(cuts, collapse = ", "),
+            "; rules: ", paste(finfl_Value, collapse = "/"))
+    message("Families per group: ",
+            paste(as.integer(table(factor(rank_group,
+              levels = paste0("G", seq_len(nGroups))))), collapse = ", "))
+  }
+  boundary_colors <- c("blue", "gray60", "red")
+  centers <- (c(0L, cuts) + c(cuts, n_family) + 1) / 2
+  families_rank <- ggplot2::ggplot(
+    BV_fam, ggplot2::aes(x = Family, y = .data[[BV_Column]])) +
+    ggplot2::geom_point(size = 2) +
+    ggplot2::ggtitle(paste("Thinning Strategies based on", Trait, "Trait")) +
+    ggplot2::ylab(paste0("Additive genetic effect (", BV_Column,
+                             ") from ", Trait, " trait")) +
+    ggplot2::xlab("Families") +
+    ggplot2::geom_hline(yintercept = 0, linetype = "dashed",
+                         colour = "gray60", linewidth = 0.5) +
+    ggplot2::scale_x_discrete(
+      guide = ggplot2::guide_axis(n.dodge = n.dodge_plot1,
+                                  angle = angle_plot1))
+  for (j in seq_along(cuts))
+    families_rank <- families_rank +
+      ggplot2::geom_vline(xintercept = cuts[j] + 0.5,
+                          linetype = 4, color = boundary_colors[j],
+                          linewidth = 0.7)
+  for (j in seq_len(nGroups))
+    families_rank <- families_rank +
+      ggplot2::annotate("text", x = centers[j],
+                        y = label.group.y[min(j, length(label.group.y))],
+                        label = paste0("G", j))
+  if (isTRUE(Plot.Rank)) plot(families_rank + additional_layer_plot1)
+  if (isTRUE(STP)) {
+    Data_Total$Plot <- as.character(Data_Total[[Bloc_Column]])
+  } else {
+    Data_Total$Plot <- paste0(Data_Total[[Family_Data_Total]], ":",
+                               Data_Total[[Bloc_Column]])
+  }
 
   # Screen compact records first, reconstruct selected individuals only at the end.
   # Ne is based on family contribution counts, not on average BLUP values.
@@ -709,12 +468,24 @@ Thinning_BreedR <- function(BV_Column = "a_total",
                                        as.character(Data_Total[[id]][ii]))])
   })
   names(cells) <- groups
-  nrep <- length(unique(Data_Total[[Bloc_Column]]))
+  # No cell can contribute more trees than its actual size. Larger levels
+  # cause duplicate candidate selections and artificially inflate search cost.
+  max_cell <- max(0L, unlist(lapply(cells, function(z)
+    if (length(z)) max(lengths(z)) else 0L)))
+  if (max_cell < 1L) stop("No usable family/plot cells.")
   levels_n <- if (is.null(seq_combinations)) {
-    c(0L, seq.int(1L, max(1L, nrep), by = length_seq_combinations))
+    c(0L, seq.int(1L, max_cell, by = length_seq_combinations))
   } else c(0L, as.integer(seq_combinations))
-  levels_n <- sort(unique(levels_n))
-  if (anyNA(levels_n) || any(levels_n < 0)) stop("Invalid selection intensities.")
+  levels_n <- sort(unique(pmin(levels_n, max_cell)))
+  if (anyNA(levels_n) || any(levels_n < 0L))
+    stop("Invalid selection intensities.")
+  if (max_cell == 1L)
+    warning("Each family/plot cell has at most one tree; BW has only ",
+            "0/1 levels per group. Consider reviewing STP, block identifiers ",
+            "or using finer experimental plot identifiers for meaningful BW intensities.")
+  if (isTRUE(verbose))
+    message("BW selection levels: ", paste(levels_n, collapse = ", "),
+            "; maximum trees per family/plot cell: ", max_cell)
   base_n <- length(levels_n)
   total <- as.double(base_n)^nGroups - 1
   if (!is.finite(total)) stop("Combination space overflow.")
@@ -966,25 +737,34 @@ Thinning_BreedR <- function(BV_Column = "a_total",
     screened$N_Progeny / nrow(Data_Total), accuracy = 0.1)
   Thinning <- screened
   Strategies <- list()
-  if (isTRUE(rebuild_selected)) {
-    for (i in seq_len(nrow(screened))) {
-      candidate <- screened$Candidate_ID[i]
-      ix <- if (screened$Strategy[i] == "BW") {
-        select_bw(decode(as.double(sub("BW_", "", candidate))))
-      } else {
-        j <- as.integer(sub("BI_", "", candidate))
-        n <- max(1L, min(nrow(Data_Total), round(nrow(Data_Total) * is_vec[j])))
-        order_bi[seq_len(n)]
-      }
+  # Always provide selected individual IDs. Full reconstruction is optional.
+  # Compact records avoid copying the entire experimental data frame.
+  for (i in seq_len(nrow(screened))) {
+    candidate <- screened$Candidate_ID[i]
+    ix <- if (screened$Strategy[i] == "BW") {
+      select_bw(decode(as.double(sub("BW_", "", candidate))))
+    } else {
+      j <- as.integer(sub("BI_", "", candidate))
+      n <- max(1L, min(nrow(Data_Total),
+                     round(nrow(Data_Total) * is_vec[j])))
+      order_bi[seq_len(n)]
+    }
+    if (isTRUE(rebuild_selected)) {
       item <- Data_Total[ix, , drop = FALSE]
       item$BV <- item[[blup_col]] + base_trait
-      item$Strategy <- screened$Strategy[i]
-      item$N_Strategy <- i
-      Strategies[[as.character(i)]] <- item
+    } else {
+      item <- data.frame(
+        TreeID = as.character(Data_Total[[id]][ix]),
+        Family = as.character(Data_Total$Family[ix]),
+        Group = as.character(Data_Total$Group[ix]),
+        BLUP = as.numeric(Data_Total[[blup_col]][ix]),
+        stringsAsFactors = FALSE)
     }
+    item$Strategy <- screened$Strategy[i]
+    item$N_Strategy <- i
+    Strategies[[as.character(i)]] <- item
   }
-  BV_fam$Group <- Data_Total$Group[match(as.character(BV_fam$Family),
-                                         Data_Total$Family)]
+  # Group assignment already follows the exact ranking-plot boundaries.
   if (isTRUE(save_table_xlsx)) {
     if (!requireNamespace("openxlsx", quietly = TRUE))
       stop("Install 'openxlsx' for Excel export.")
