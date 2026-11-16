@@ -39,6 +39,7 @@
 #' @param target_NE_tol Absolute Ne tolerance, either a scalar or one value per target.
 #' @param n_best_strategies Maximum number of retained strategies per Ne target.
 #' @param max_candidates Maximum number of BW combinations screened.
+#' @param all_scenarios Logical. If TRUE, exhaustively evaluate and retain every BW/BI scenario, ignoring target_NE, max_candidates, and n_best_strategies. Use rebuild_selected = FALSE to avoid retaining all individual records.
 #' @param rebuild_selected Logical. Rebuild full individual-level records only for retained strategies.
 #' @param seed Random seed used when sampling the candidate-combination space.
 #'
@@ -95,6 +96,7 @@ Thinning_BreedR <- function(BV_Column = "a_total",
                             target_NE_tol = 10,
                             n_best_strategies = 20L,
                             max_candidates = 50000L,
+                            all_scenarios = FALSE,
                             rebuild_selected = TRUE,
                             seed = 123L) {
   if (verbose) {
@@ -668,6 +670,8 @@ Thinning_BreedR <- function(BV_Column = "a_total",
         any(!is.finite(target_NE_tol)) || any(target_NE_tol < 0))
       stop("target_NE_tol must contain nonnegative tolerances.")
   }
+  if (length(all_scenarios) != 1L || is.na(all_scenarios) || !is.logical(all_scenarios))
+    stop("all_scenarios must be TRUE or FALSE.")
   if (n_best_strategies < 1 || max_candidates < 1)
     stop("n_best_strategies and max_candidates must be positive.")
   n_best_strategies <- as.integer(n_best_strategies)
@@ -703,6 +707,12 @@ Thinning_BreedR <- function(BV_Column = "a_total",
       if (!combo[k]) return(integer())
       unlist(lapply(cells[[k]], utils::head, n = combo[k]), use.names = FALSE)
     }), use.names = FALSE)
+  }
+  # In exhaustive mode no Ne filter is applied, and all scenario summaries are kept.
+  if (all_scenarios) {
+    if (!is.null(target_NE)) message("all_scenarios = TRUE: target_NE filtering is disabled.")
+    target_NE <- NULL
+    if (isTRUE(rebuild_selected)) warning("all_scenarios = TRUE with rebuild_selected = TRUE may require considerable memory.")
   }
   # Cache the selected-tree counts and cumulative BLUP sums once.
   # Candidate Ne requires only per-family counts; full data frames are not created.
@@ -763,8 +773,10 @@ Thinning_BreedR <- function(BV_Column = "a_total",
     )
   }
   # Use deterministic exhaustive screening for small search spaces.
-  ncheck <- as.integer(min(total, max_candidates))
-  if (total > max_candidates) {
+  if (all_scenarios && total > .Machine$integer.max)
+    stop("Exhaustive search exceeds supported integer indexing; restrict seq_combinations or nGroups.")
+  ncheck <- as.integer(if (all_scenarios) total else min(total, max_candidates))
+  if (!all_scenarios && total > max_candidates) {
     warning("Candidate combinations exceed max_candidates. Sampling does not guarantee global optimality.")
     set.seed(seed)
     codes <- unique(c(seq_len(min(ncheck, 100L)),
@@ -836,7 +848,9 @@ Thinning_BreedR <- function(BV_Column = "a_total",
     screened <- screened[order(-screened$GS_absolute,
                                screened$NE_Distance,
                                screened$Candidate_ID), , drop = FALSE]
-    if (is.null(target_NE)) {
+    if (all_scenarios) {
+      # Keep every eligible BW/BI scenario without truncating the ranking.
+    } else if (is.null(target_NE)) {
       screened <- utils::head(screened, n_best_strategies)
     } else {
       screened <- dplyr::bind_rows(lapply(unique(screened$Target_NE), function(x) {
@@ -844,6 +858,11 @@ Thinning_BreedR <- function(BV_Column = "a_total",
                     n_best_strategies)
       }))
     }
+  }
+  if (!nrow(screened)) {
+    warning("No strategies matched the current selection criteria.")
+    return(list(Thinning = screened, Strategies = list(), BV_Fam = BV_fam,
+                ggPlot_families_rank = families_rank))
   }
   screened$N_Strategy <- seq_len(nrow(screened))
   screened$Trait <- Trait
