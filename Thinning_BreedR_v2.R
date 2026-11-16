@@ -525,13 +525,52 @@ Thinning_BreedR <- function(BV_Column = "a_total",
 
   # Screen compact records first, reconstruct selected individuals only at the end.
   # Ne is based on family contribution counts, not on average BLUP values.
-  if (!id %in% names(Data_Total)) stop("Column 'id' not found in Data_Total.")
+  # Resolve user-supplied column names before any indexing or block grouping.
+  # Match case-insensitively only when the match is unique.
+  resolve_column <- function(requested, available, argument) {
+    if (requested %in% available) return(requested)
+    matches <- available[tolower(available) == tolower(requested)]
+    if (length(matches) == 1L) {
+      warning(sprintf("%s: using column '%s' instead of '%s'.",
+                      argument, matches, requested))
+      return(matches)
+    }
+    stop(sprintf("%s column '%s' not found. Available columns: %s",
+                 argument, requested, paste(available, collapse = ", ")))
+  }
+  Bloc_Column <- resolve_column(Bloc_Column, names(Data_Total), "Bloc_Column")
+  Family_Data_Total <- resolve_column(Family_Data_Total, names(Data_Total),
+                                      "Family_Data_Total")
+  Trait <- resolve_column(Trait, names(Data_Total), "Trait")
+  if (!id %in% names(Data_Total)) {
+    # The user's experimental dataset stores individual IDs in TreeID, not ID.
+    alternative_id <- if (TreeID_Column %in% names(Data_Total)) TreeID_Column else {
+      matching <- names(Data_Total)[tolower(names(Data_Total)) ==
+                                      tolower(TreeID_Column)]
+      if (length(matching) == 1L) matching else character()
+    }
+    if (length(alternative_id) == 1L) {
+      warning(sprintf("Individual identifier '%s' not found; using '%s'.",
+                      id, alternative_id))
+      id <- alternative_id
+    } else {
+      stop(sprintf("Individual identifier '%s' not found. Pass id = 'TreeID' or another valid column.", id))
+    }
+  }
+  if (!is.null(Tree_BV)) {
+    TreeID_Column <- resolve_column(TreeID_Column, names(Data_Total),
+                                    "TreeID_Column (Data_Total)")
+    TreeID_Column_BV <- resolve_column(TreeID_Column, names(Tree_BV),
+                                       "TreeID_Column (Tree_BV)")
+    Tree_BV_Column <- resolve_column(Tree_BV_Column, names(Tree_BV),
+                                     "Tree_BV_Column")
+  }
   if (!Trait %in% names(Data_Total)) stop("Trait not found in Data_Total.")
   Data_Total$Family <- as.character(Data_Total[[Family_Data_Total]])
   if (!is.null(Tree_BV)) {
     if (!all(c(TreeID_Column, Tree_BV_Column) %in% names(Tree_BV)) ||
         !TreeID_Column %in% names(Data_Total)) stop("Invalid Tree_BV columns.")
-    tb <- Tree_BV[, c(TreeID_Column, Tree_BV_Column), drop = FALSE]
+    tb <- Tree_BV[, c(TreeID_Column_BV, Tree_BV_Column), drop = FALSE]
     names(tb) <- c(".tree_id", ".individual_blup")
     tb$.tree_id <- as.character(tb$.tree_id)
     if (anyDuplicated(tb$.tree_id)) stop("Duplicated TreeIDs in Tree_BV.")
