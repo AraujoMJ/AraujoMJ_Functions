@@ -16,19 +16,28 @@
 #' @param Family_Data_Total Name of the family column in `Data_Total`.
 #' @param Bloc_Column Name of the experimental block column.
 #' @param Family_Column Name of the family column in `BV_fam`.
-#' @param nGroups Number of groups to form (2, 3, or 4).
+#' @param nGroups Number of groups to form (2 through 6).
+#' @param positive_groups Number of groups among nonnegative family BLUPs;
+#'   NULL uses 1/1 for 2 groups, 2/1 or 1/2 for 3, 2/2 for 4,
+#'   3/2 or 2/3 for 5, and 3/3 for 6. Both sides permit 1 to 3 groups.
 #' @param label.group.y Vector of Y-axis positions for group annotations in the plot.
 #' @param Plot.Rank Logical. If TRUE, plots the family ranking graph.
 #' @param save_plot_rank Logical. If TRUE, saves the ranking plot.
 #' @param IS Vector of BI proportions; NULL evaluates 1-50% by 1%, 55-100% by 5%.
 #' @param id Name of the individual ID column.
-#' @param nGroups3 Direction for 3-group split ("left" or "right").
+#' @param nGroups3 Direction of the extra group for 3 groups ("left" or "right").
+#' @param nGroups5 Direction of the extra group for 5 groups ("left":
+#'   3 positive / 2 negative; "right": 2 positive / 3 negative).
 #' @param STP Logical. If TRUE, treats blocks as experimental units.
 #' @param n.dodge_plot1 Integer. Number of lines for X-axis labels.
 #' @param angle_plot1 Angle of X-axis labels.
 #' @param nt_alpha1 Parameters for inflection detection in best families.
 #' @param nt_alpha2 Parameters for inflection detection in worst families.
-#' @param finfl_Value Vector with "max" or "min" to define inflection points.
+#' @param finfl_Value Two-element vector specifying which candidate inflection
+#'   to prefer on the nonnegative and negative family sides, respectively.
+#'   A second split (for three groups on one side) uses another detected
+#'   inflection when available; otherwise the largest remaining segment is
+#'   divided at its midpoint and reported as a fallback.
 #' @param additional_layer_plot1 Additional ggplot2 layers for the ranking plot.
 #' @param seq_combinations Custom sequence for thinning combinations.
 #' @param length_seq_combinations Length of the thinning combination sequence.
@@ -69,6 +78,7 @@
 #'   \item{Thinning}{Final table with thinning strategies, GS, NE, and number of families per group.}
 #'   \item{Strategies}{List of selected individuals per strategy.}
 #'   \item{BV_Fam}{Data frame with families and their assigned groups.}
+#'   \item{Group_Boundaries}{Global rank cutpoints and their origin: inflection, zero crossing, or midpoint fallback.}
 #'   \item{ggPlot_families_rank}{Family ranking plot.}
 #' }
 #'
@@ -90,6 +100,8 @@ Thinning_BreedR <- function(BV_Column = "a_total",
                             IS = NULL,
                             id = "ID",
                             nGroups3 = "left",
+                            nGroups5 = "left",
+                            positive_groups = NULL,
                             STP = FALSE,
                             n.dodge_plot1 = 1,
                             angle_plot1 = 45,
@@ -130,9 +142,30 @@ Thinning_BreedR <- function(BV_Column = "a_total",
     install.packages("gtools")
   }
   
-  if (!nGroups %in% 2:4) {
-    stop("nGroups should be: 2, 3 or 4")
+  if (length(nGroups) != 1L || is.na(nGroups) ||
+      !is.numeric(nGroups) || nGroups != floor(nGroups) ||
+      !nGroups %in% 2:6) {
+    stop("nGroups must be an integer from 2 to 6.")
   }
+  if (!nGroups3 %in% c("left", "right") ||
+      !nGroups5 %in% c("left", "right"))
+    stop("nGroups3 and nGroups5 must be 'left' or 'right'.")
+  if (is.null(positive_groups)) {
+    positive_groups <- switch(as.character(nGroups),
+      "2" = 1L,
+      "3" = if (nGroups3 == "left") 2L else 1L,
+      "4" = 2L,
+      "5" = if (nGroups5 == "left") 3L else 2L,
+      "6" = 3L)
+  }
+  if (length(positive_groups) != 1L ||
+      !is.numeric(positive_groups) || !is.finite(positive_groups) ||
+      positive_groups != floor(positive_groups) ||
+      !positive_groups %in% 1:3 ||
+      !(nGroups - positive_groups) %in% 1:3)
+    stop("positive_groups must give 1 to 3 groups on each BLUP-sign side.")
+  positive_groups <- as.integer(positive_groups)
+  negative_groups <- as.integer(nGroups - positive_groups)
   
   if (any(!finfl_Value %in% c("max", "min"))) {
     stop("finfl_value should be a vector of lenght 2 of: 'max' or 'min'")
@@ -205,24 +238,20 @@ Thinning_BreedR <- function(BV_Column = "a_total",
     stop(e)
   })
   
-  # Identify valid family-rank boundaries and apply the requested inflection rule.
-  # finfl_Value[1] controls the positive-family split and finfl_Value[2]
-  # controls the negative-family split; both refer to ranked family indices.
+  # Compute every rank boundary on the complete, unfiltered family set.
+  # The zero crossing is a mandatory boundary between BLUP-sign sides.
   family_values <- BV_fam[[BV_Column]]
   if (!is.numeric(family_values) || any(!is.finite(family_values)))
     stop("Family breeding values must be finite numeric values.")
   n_family <- nrow(BV_fam)
   n_positive <- sum(family_values >= 0)
   n_negative <- n_family - n_positive
-  if (n_positive == 0L || n_negative == 0L)
-    stop("The ranked family values must include both nonnegative and negative families.")
-  if (nGroups %in% 3:4 && min(n_positive, n_negative) < 2L)
-    stop("At least two families on each side of zero are needed for inflection-based grouping.")
-  if (!nGroups3 %in% c("left", "right"))
-    stop("nGroups3 must be 'left' or 'right'.")
-  if (length(finfl_Value) != 2L ||
-      anyNA(finfl_Value) || any(!finfl_Value %in% c("min", "max")))
-    stop("finfl_Value must contain exactly two entries, each 'min' or 'max'.")
+  if (n_positive < positive_groups || n_negative < negative_groups)
+    stop(sprintf("Insufficient families for %d positive and %d negative groups.",
+                 positive_groups, negative_groups))
+  if (length(finfl_Value) != 2L || anyNA(finfl_Value) ||
+      any(!finfl_Value %in% c("min", "max")))
+    stop("finfl_Value must contain two entries: 'min' or 'max'.")
 
   inflection_candidates <- function(values, tuning, side) {
     n <- length(values)
@@ -241,37 +270,68 @@ Thinning_BreedR <- function(BV_Column = "a_total",
     candidates <- sort(unique(as.integer(round(candidates[is.finite(candidates)]))))
     candidates[candidates >= 1L & candidates < n]
   }
-  major_candidates <- if (nGroups == 2L) integer() else
-    inflection_candidates(family_values[seq_len(n_positive)], nt_alpha1, "Positive")
-  minor_candidates <- if (nGroups == 2L || (nGroups == 3L && nGroups3 == "left"))
-    integer() else inflection_candidates(
-      family_values[n_positive + seq_len(n_negative)], nt_alpha2, "Negative")
 
-  choose_boundary <- function(candidates, n, rule, side) {
-    if (!length(candidates)) {
-      boundary <- max(1L, min(n - 1L, as.integer(floor(n / 2))))
-      warning(sprintf(
-        "No valid %s inflection candidate; using midpoint rank %d of %d.",
-        side, boundary, n))
-      return(boundary)
+  # Keep the legacy primary min/max inflection choice. For a third group
+  # on the same side, prefer a distinct additional detected inflection.
+  # If the method provides no second inflection, bisect the longest
+  # available rank segment. The fallback is not an inferred inflection.
+  split_side <- function(values, n_side_groups, tuning, rule, side) {
+    n <- length(values)
+    candidates <- if (n_side_groups > 1L)
+      inflection_candidates(values, tuning, side) else integer()
+    selected <- integer()
+    methods <- character()
+    while (length(selected) < n_side_groups - 1L) {
+      available <- setdiff(candidates, selected)
+      if (!length(selected) && length(available)) {
+        chosen <- if (rule == "min") min(available) else max(available)
+        method <- "inflexion"
+      } else if (length(available)) {
+        edges <- c(0L, sort(selected), n)
+        usable <- available[vapply(available, function(v) {
+          j <- findInterval(v - 0.5, edges, rightmost.closed = TRUE)
+          (v - edges[j] >= 1L) && (edges[j + 1L] - v >= 1L)
+        }, logical(1))]
+        if (length(usable)) {
+          if (rule == "min") chosen <- min(usable) else chosen <- max(usable)
+          method <- "inflexion"
+        } else available <- integer()
+      }
+      if (!length(available) || (!length(selected) && !length(candidates))) {
+        edges <- c(0L, sort(selected), n)
+        spans <- diff(edges)
+        eligible <- which(spans >= 2L)
+        if (!length(eligible)) stop("Cannot form nonempty family groups.")
+        span <- eligible[which.max(spans[eligible])]
+        chosen <- edges[span] + floor(spans[span] / 2L)
+        method <- "midpoint_fallback"
+        warning(sprintf("%s side: no additional valid inflection; ",
+                        side), sprintf("splitting at local rank %d.", chosen))
+      }
+      selected <- c(selected, as.integer(chosen))
+      methods <- c(methods, method)
     }
-    if (rule == "min") min(candidates) else max(candidates)
+    ord <- order(selected)
+    list(cuts = as.integer(selected[ord]), methods = methods[ord],
+         candidates = candidates)
   }
-  major_cut <- if (nGroups == 2L || (nGroups == 3L && nGroups3 == "right"))
-    NA_integer_ else choose_boundary(major_candidates, n_positive,
-                                   finfl_Value[1L], "positive")
-  minor_cut <- if (nGroups == 2L || (nGroups == 3L && nGroups3 == "left"))
-    NA_integer_ else n_positive + choose_boundary(
-      minor_candidates, n_negative, finfl_Value[2L], "negative")
-  cuts <- if (nGroups == 2L) n_positive
-    else if (nGroups3 == "left" && nGroups == 3L)
-      c(major_cut, n_positive)
-    else if (nGroups == 3L) c(n_positive, minor_cut)
-    else c(major_cut, n_positive, minor_cut)
+  pos_split <- split_side(family_values[seq_len(n_positive)],
+                          positive_groups, nt_alpha1,
+                          finfl_Value[1L], "Positive")
+  neg_split <- split_side(family_values[n_positive + seq_len(n_negative)],
+                          negative_groups, nt_alpha2,
+                          finfl_Value[2L], "Negative")
+  cuts <- c(pos_split$cuts, n_positive, n_positive + neg_split$cuts)
+  cut_methods <- c(pos_split$methods, "zero_crossing", neg_split$methods)
   cuts <- as.integer(cuts)
-  if (length(cuts) != nGroups - 1L || any(diff(c(0L, cuts, n_family)) <= 0L))
-    stop("Invalid grouping boundaries; check family values and inflection settings.")
-
+  if (length(cuts) != nGroups - 1L ||
+      any(diff(c(0L, cuts, n_family)) <= 0L))
+    stop("Invalid group boundaries: check the family count and inflections.")
+  Group_Boundaries <- data.frame(
+    Cut_Rank = cuts, Method = cut_methods,
+    Side = c(rep("positive", length(pos_split$cuts)), "zero",
+             rep("negative", length(neg_split$cuts))),
+    stringsAsFactors = FALSE)
   # Use the same boundary vector for plotting and tree group assignment.
   rank_group <- paste0("G", findInterval(
     seq_len(n_family) - 0.5, cuts) + 1L)
@@ -285,17 +345,22 @@ Thinning_BreedR <- function(BV_Column = "a_total",
   if (isTRUE(verbose)) {
     message("Global family groups constructed before individual-level eligibility filters.")
     message("Global families: ", n_family, "; eligible input trees: ", nrow(Data_Total))
+    message("Positive / negative group allocation: ",
+            positive_groups, " / ", negative_groups)
     message("Inflection candidates (positive): ",
-            paste(major_candidates, collapse = ", "))
+            paste(pos_split$candidates, collapse = ", "))
     message("Inflection candidates (negative, local ranks): ",
-            paste(minor_candidates, collapse = ", "))
+            paste(neg_split$candidates, collapse = ", "))
     message("Selected boundaries: ", paste(cuts, collapse = ", "),
+            "; methods: ", paste(cut_methods, collapse = "/"),
             "; rules: ", paste(finfl_Value, collapse = "/"))
     message("Families per group: ",
             paste(as.integer(table(factor(rank_group,
               levels = paste0("G", seq_len(nGroups))))), collapse = ", "))
   }
-  boundary_colors <- c("blue", "gray60", "red")
+  boundary_colors <- ifelse(cut_methods == "zero_crossing", "gray60",
+                             ifelse(Group_Boundaries$Side == "positive",
+                                    "blue", "red"))
   centers <- (c(0L, cuts) + c(cuts, n_family) + 1) / 2
   families_rank <- ggplot2::ggplot(
     BV_fam, ggplot2::aes(x = Family, y = .data[[BV_Column]])) +
@@ -773,6 +838,7 @@ Thinning_BreedR <- function(BV_Column = "a_total",
   if (!nrow(screened)) {
     warning("No strategies matched the current selection criteria.")
     return(list(Thinning = screened, Strategies = list(), BV_Fam = BV_fam,
+                Group_Boundaries = Group_Boundaries,
                 ggPlot_families_rank = families_rank))
   }
   screened$N_Strategy <- seq_len(nrow(screened))
@@ -825,5 +891,6 @@ Thinning_BreedR <- function(BV_Column = "a_total",
     plot = families_rank)
   if (verbose) message("Finished running Thinning_BreedR function.")
   list(Thinning = Thinning, Strategies = Strategies, BV_Fam = BV_fam,
+       Group_Boundaries = Group_Boundaries,
        ggPlot_families_rank = families_rank)
 }
