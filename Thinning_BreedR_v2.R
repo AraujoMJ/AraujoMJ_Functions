@@ -32,6 +32,22 @@
 #' @param export_id Suffix for exported file names.
 #' @param format_plot Format of the saved plot (e.g., ".tiff").
 #' @param verbose Logical. If TRUE, prints progress messages.
+#' @param Tree_BV Optional data frame containing individual breeding values (BLUPs).
+#' @param TreeID_Column Individual identifier column used to join Tree_BV and Data_Total.
+#' @param Tree_BV_Column Individual BLUP column in Tree_BV.
+#' @param target_NE Numeric vector of requested effective population sizes; NULL disables the filter.
+#' @param target_NE_tol Absolute Ne tolerance, either a scalar or one value per target.
+#' @param n_best_strategies Maximum number of retained strategies per Ne target.
+#' @param max_candidates Maximum number of BW combinations screened.
+#' @param rebuild_selected Logical. Rebuild full individual-level records only for retained strategies.
+#' @param seed Random seed used when sampling the candidate-combination space.
+#'
+#' @details Candidate strategies are screened using compact numerical summaries.
+#' Effective population size is calculated from family contribution counts,
+#' not from the magnitude or mean of individual BLUPs. Negative BLUPs are valid.
+#' GS_absolute is the mean selected BLUP in trait units; GS is its ratio to the
+#' phenotypic mean when that mean is nonzero. When the candidate space exceeds
+#' max_candidates, a sampled search is used and global optimality is not guaranteed.
 #'
 #' @return A list containing:
 #' \describe{
