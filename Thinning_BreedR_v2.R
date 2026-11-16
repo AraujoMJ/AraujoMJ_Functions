@@ -58,7 +58,16 @@
 #' @param min_group_families Minimum represented families in each G1..Gn group.
 #'   A scalar applies to all groups; a vector supplies group-specific minima.
 #'   Default is one family in G1 and zero in the remaining groups.
-#' @param min_group_trees Minimum selected trees in each group (default zero).
+#' @param min_group_trees Minimum TOTAL selected trees in each group.
+#' @param min_trees_per_family Minimum trees contributed by EACH selected family,
+#'   by group. Zero disables this restriction for that group; a family may be
+#'   entirely unselected. The threshold applies to nonzero family contributions.
+#' @param group_priority Group hierarchy: "none" (no hierarchy), "presence"
+#'   (selecting a lower-ranked group requires at least one tree in every
+#'   higher-ranked group), or "nonincreasing" (selected group tree totals
+#'   must decrease or stay constant from G1 to Gn).
+#' @param max_selected_trees Upper limit on selected trees PER strategy.
+#'   NULL disables the limit; this does not cap candidate combinations.
 #' @param bw_selection_unit One of 'auto', 'plot', or 'family'. Auto switches to
 #'   family-level selection for singleton family/plot cells. Plot preserves the
 #'   original per-plot selection semantics.
@@ -72,6 +81,10 @@
 #' GS_absolute is the mean selected BLUP in trait units; GS is its ratio to the
 #' phenotypic mean when that mean is nonzero. When the candidate space exceeds
 #' max_candidates, a sampled search is used and global optimality is not guaranteed.
+#' A group minimum applies to the whole group, whereas min_trees_per_family
+#' constrains each represented family separately. For example, a minimum of
+#' three does not require every eligible family to be selected, but forbids
+#' keeping only one or two trees from any selected family in that group.
 #'
 #' @return A list containing:
 #' \describe{
@@ -127,6 +140,9 @@ Thinning_BreedR <- function(BV_Column = "a_total",
                             seed = 123L,
                             min_group_families = NULL,
                             min_group_trees = NULL,
+                            min_trees_per_family = NULL,
+                            group_priority = "presence",
+                            max_selected_trees = NULL,
                             pareto = TRUE,
                             bw_selection_unit = "auto",
                             BV_fam_full = NULL) {
@@ -549,6 +565,21 @@ Thinning_BreedR <- function(BV_Column = "a_total",
     min_group_families, c(1L, rep(0L, nGroups - 1L)), "min_group_families")
   min_group_trees <- normalize_minima(
     min_group_trees, rep(0L, nGroups), "min_group_trees")
+  min_trees_per_family <- normalize_minima(
+    min_trees_per_family, rep(0L, nGroups), "min_trees_per_family")
+  if (!is.character(group_priority) || length(group_priority) != 1L ||
+      is.na(group_priority) ||
+      !group_priority %in% c("none", "presence", "nonincreasing"))
+    stop("group_priority must be 'none', 'presence', or 'nonincreasing'.")
+  if (!is.null(max_selected_trees)) {
+    if (length(max_selected_trees) != 1L ||
+        !is.numeric(max_selected_trees) ||
+        !is.finite(max_selected_trees) ||
+        max_selected_trees < 1 ||
+        max_selected_trees != floor(max_selected_trees))
+      stop("max_selected_trees must be a positive whole number or NULL.")
+    max_selected_trees <- as.integer(max_selected_trees)
+  }
   if (!is.logical(pareto) || length(pareto) != 1L || is.na(pareto))
     stop("pareto must be TRUE or FALSE.")
   if (!is.character(bw_selection_unit) ||
@@ -624,7 +655,25 @@ Thinning_BreedR <- function(BV_Column = "a_total",
   family_levels <- sort(unique(Data_Total$Family))
   nf <- length(family_levels)
   fam_index <- match(Data_Total$Family, family_levels)
+  family_group <- match(
+    Data_Total$Group[match(family_levels, Data_Total$Family)], groups)
+  if (anyNA(family_group)) stop("One or more families have no valid group.")
   blups <- Data_Total[[blup_col]]
+  eligible_by_group <- tabulate(match(Data_Total$Group, groups),
+                                nbins = nGroups)
+  if (any(min_group_trees > eligible_by_group))
+    warning("Some min_group_trees exceed the number of eligible trees in ",
+            "their groups: no strategy can satisfy the current constraints.")
+  if (isTRUE(verbose)) {
+    message("Eligible trees per group: ",
+            paste(eligible_by_group, collapse = ", "))
+    message("Group priority mode: ", group_priority,
+            "; per-family minimum: ",
+            paste(min_trees_per_family, collapse = ", "),
+            "; maximum trees per strategy: ",
+            if (is.null(max_selected_trees)) "unlimited"
+            else max_selected_trees)
+  }
   nlevels <- length(levels_n)
   group_count <- vector("list", nGroups)
   group_sum <- vector("list", nGroups)
@@ -645,6 +694,28 @@ Thinning_BreedR <- function(BV_Column = "a_total",
     group_sum[[k]] <- sm
     group_tree_count[[k]] <- colSums(cnt)
     group_fam_count[[k]] <- colSums(cnt > 0L)
+  }
+  # Apply all hard constraints before evaluating genetic gain or Ne.
+  # Family minima are enforced for each represented family, not as a
+  # misleading group-wide total. All groups follow global BV ranking.
+  feasible_contributions <- function(counts, gtrees, gfams) {
+    ns <- sum(counts)
+    if (!ns) return(FALSE)
+    if (!is.null(max_selected_trees) && ns > max_selected_trees)
+      return(FALSE)
+    if (any(gtrees < min_group_trees) ||
+        any(gfams < min_group_families)) return(FALSE)
+    if (group_priority == "presence" &&
+        any(cumsum(gtrees == 0L) > 0L & gtrees > 0L))
+      return(FALSE)
+    if (group_priority == "nonincreasing" &&
+        any(diff(gtrees) > 0L))
+      return(FALSE)
+    selected <- which(counts > 0L)
+    if (length(selected) &&
+        any(counts[selected] < min_trees_per_family[family_group[selected]]))
+      return(FALSE)
+    TRUE
   }
   # Preserve the previous count-based Ne estimator.
   calc_ne_counts <- function(counts) {
@@ -735,7 +806,7 @@ Thinning_BreedR <- function(BV_Column = "a_total",
       group_tree_count[[k]][lev[k]], numeric(1))
     gfams <- vapply(seq_len(nGroups), function(k)
       group_fam_count[[k]][lev[k]], numeric(1))
-    if (any(gtrees < min_group_trees) || any(gfams < min_group_families))
+    if (!feasible_contributions(contributions, gtrees, gfams))
       next
     ne <- calc_ne_counts(contributions)
     matched <- matched_target(ne)
@@ -769,7 +840,7 @@ Thinning_BreedR <- function(BV_Column = "a_total",
       ix <- order_bi[seq_len(ns)][gindex == k]
       length(unique(fam_index[ix]))
     }, integer(1))
-    if (any(gtrees < min_group_trees) || any(gfams < min_group_families))
+    if (!feasible_contributions(counts, gtrees, gfams))
       next
     ne <- calc_ne_counts(counts)
     matched <- matched_target(ne)
@@ -788,7 +859,8 @@ Thinning_BreedR <- function(BV_Column = "a_total",
     ))
   }
   if (!nrows) {
-    warning("No candidate strategy matched the requested target Ne range.")
+    warning("No strategy satisfies the current family/group, tree-count ",
+            "and Ne restrictions. Relax constraints or expand max_candidates.")
     screened <- data.frame()
   } else {
     screened <- dplyr::bind_rows(rows[seq_len(nrows)])
