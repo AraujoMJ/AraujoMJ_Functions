@@ -460,33 +460,40 @@ Thinning_BreedR <- function(BV_Column = "a_total",
       message("Preparing Data_Total groups...")
     }
     # Map group for trees in dataset that have BV and experiment information
-    Data_Total$Group <- NA
+    Data_Total$Group <- NA_character_
+    # Family IDs may be factors in BV_fam and character strings in Data_Total.
+    # Compare normalized character keys without changing the family ranking order.
+    family_group_key <- trimws(as.character(Data_Total[[Family_Data_Total]]))
+    family_rank_key <- trimws(as.character(BV_fam$Family))
+    if (!any(family_group_key %in% family_rank_key)) {
+      stop("No family identifiers overlap between Data_Total and BV_fam. Check Family_Data_Total and Family_Column.")
+    }
     
     # G1
     if (nGroups == 2) {
-      Data_Total[Data_Total[, Family_Data_Total] %in% as.vector(BV_fam[1:Fam_Zero, "Family"]), "Group"] <-
+      Data_Total[family_group_key %in% family_rank_key[1:Fam_Zero], "Group"] <-
         "G1"
     } else {
-      Data_Total[Data_Total[, Family_Data_Total] %in% as.vector(BV_fam[1:Inflexi_major, "Family"]), "Group"] <-
+      Data_Total[family_group_key %in% family_rank_key[1:Inflexi_major], "Group"] <-
         "G1"
     }
     
     # G2
     if (nGroups == 2) {
-      Data_Total[Data_Total[, Family_Data_Total] %in% as.vector(BV_fam[(Fam_Zero + 1):nrow(BV_fam), "Family"]), "Group"] <-
+      Data_Total[family_group_key %in% family_rank_key[(Fam_Zero + 1):nrow(BV_fam)], "Group"] <-
         "G2"
     } else {
-      Data_Total[Data_Total[, Family_Data_Total] %in% as.vector(BV_fam[(Inflexi_major + 1):Fam_Zero, "Family"]), "Group"] <-
+      Data_Total[family_group_key %in% family_rank_key[(Inflexi_major + 1):Fam_Zero], "Group"] <-
         "G2"
     }
     
     # G3
     if (nGroups == 3) {
-      Data_Total[Data_Total[, Family_Data_Total] %in% as.vector(BV_fam[(Fam_Zero + 1):nrow(BV_fam), "Family"]), "Group"] <-
+      Data_Total[family_group_key %in% family_rank_key[(Fam_Zero + 1):nrow(BV_fam)], "Group"] <-
         "G3"
     } else {
       if (nGroups == 4) {
-        Data_Total[Data_Total[, Family_Data_Total] %in% as.vector(BV_fam[(Fam_Zero + 1):Inflexi_minor, "Family"]), "Group"] <-
+        Data_Total[family_group_key %in% family_rank_key[(Fam_Zero + 1):Inflexi_minor], "Group"] <-
           "G3"
       }
       
@@ -494,7 +501,7 @@ Thinning_BreedR <- function(BV_Column = "a_total",
     
     # G4
     if (nGroups == 4) {
-      Data_Total[Data_Total[, Family_Data_Total] %in% as.vector(BV_fam[(Inflexi_minor + 1):nrow(BV_fam), "Family"]), "Group"] <-
+      Data_Total[family_group_key %in% family_rank_key[(Inflexi_minor + 1):nrow(BV_fam)], "Group"] <-
         "G4"
     }
     
@@ -525,13 +532,53 @@ Thinning_BreedR <- function(BV_Column = "a_total",
 
   # Screen compact records first, reconstruct selected individuals only at the end.
   # Ne is based on family contribution counts, not on average BLUP values.
-  if (!id %in% names(Data_Total)) stop("Column 'id' not found in Data_Total.")
+  # Resolve user-supplied column names before any indexing or block grouping.
+  # Match case-insensitively only when the match is unique.
+  resolve_column <- function(requested, available, argument) {
+    if (requested %in% available) return(requested)
+    matches <- available[tolower(available) == tolower(requested)]
+    if (length(matches) == 1L) {
+      warning(sprintf("%s: using column '%s' instead of '%s'.",
+                      argument, matches, requested))
+      return(matches)
+    }
+    stop(sprintf("%s column '%s' not found. Available columns: %s",
+                 argument, requested, paste(available, collapse = ", ")))
+  }
+  Bloc_Column <- resolve_column(Bloc_Column, names(Data_Total), "Bloc_Column")
+  Family_Data_Total <- resolve_column(Family_Data_Total, names(Data_Total),
+                                      "Family_Data_Total")
+  Trait <- resolve_column(Trait, names(Data_Total), "Trait")
+  if (!id %in% names(Data_Total)) {
+    # The user's experimental dataset stores individual IDs in TreeID, not ID.
+    alternative_id <- if (TreeID_Column %in% names(Data_Total)) TreeID_Column else {
+      matching <- names(Data_Total)[tolower(names(Data_Total)) ==
+                                      tolower(TreeID_Column)]
+      if (length(matching) == 1L) matching else character()
+    }
+    if (length(alternative_id) == 1L) {
+      warning(sprintf("Individual identifier '%s' not found; using '%s'.",
+                      id, alternative_id))
+      id <- alternative_id
+    } else {
+      stop(sprintf("Individual identifier '%s' not found. Pass id = 'TreeID' or another valid column.", id))
+    }
+  }
+  if (!is.null(Tree_BV)) {
+    TreeID_Column <- resolve_column(TreeID_Column, names(Data_Total),
+                                    "TreeID_Column (Data_Total)")
+    TreeID_Column_BV <- resolve_column(TreeID_Column, names(Tree_BV),
+                                       "TreeID_Column (Tree_BV)")
+    Tree_BV_Column <- resolve_column(Tree_BV_Column, names(Tree_BV),
+                                     "Tree_BV_Column")
+  }
   if (!Trait %in% names(Data_Total)) stop("Trait not found in Data_Total.")
   Data_Total$Family <- as.character(Data_Total[[Family_Data_Total]])
   if (!is.null(Tree_BV)) {
-    if (!all(c(TreeID_Column, Tree_BV_Column) %in% names(Tree_BV)) ||
+    if (!TreeID_Column_BV %in% names(Tree_BV) ||
+        !Tree_BV_Column %in% names(Tree_BV) ||
         !TreeID_Column %in% names(Data_Total)) stop("Invalid Tree_BV columns.")
-    tb <- Tree_BV[, c(TreeID_Column, Tree_BV_Column), drop = FALSE]
+    tb <- Tree_BV[, c(TreeID_Column_BV, Tree_BV_Column), drop = FALSE]
     names(tb) <- c(".tree_id", ".individual_blup")
     tb$.tree_id <- as.character(tb$.tree_id)
     if (anyDuplicated(tb$.tree_id)) stop("Duplicated TreeIDs in Tree_BV.")
@@ -542,10 +589,74 @@ Thinning_BreedR <- function(BV_Column = "a_total",
     warning("Tree_BV missing: falling back to BV_Column (family value if merged).")
     blup_col <- BV_Column
   }
-  Data_Total <- Data_Total[!is.na(Data_Total[[blup_col]]) &
-                           !is.na(Data_Total[[Trait]]) &
-                           !is.na(Data_Total$Group), , drop = FALSE]
-  if (!nrow(Data_Total)) stop("No usable individual records.")
+  # Diagnose each exclusion separately before filtering the data.
+  # This distinguishes unmatched tree BLUPs, missing trait values, and missing groups.
+  # Never replace missing BLUPs with zero: missing values indicate absent predictions.
+  if (!is.numeric(Data_Total[[blup_col]])) {
+    stop(sprintf("Individual BLUP column '%s' must be numeric; current class: %s",
+                 blup_col, paste(class(Data_Total[[blup_col]]), collapse = ", ")))
+  }
+  if (!is.numeric(Data_Total[[Trait]])) {
+    stop(sprintf("Trait column '%s' must be numeric; current class: %s",
+                 Trait, paste(class(Data_Total[[Trait]]), collapse = ", ")))
+  }
+  usable_blup <- is.finite(Data_Total[[blup_col]])
+  usable_trait <- is.finite(Data_Total[[Trait]])
+  usable_group <- !is.na(Data_Total$Group) & Data_Total$Group %in%
+    paste0("G", seq_len(nGroups))
+  usable_all <- usable_blup & usable_trait & usable_group
+  family_data_keys <- trimws(as.character(Data_Total[[Family_Data_Total]]))
+  family_bv_keys <- trimws(as.character(BV_fam$Family))
+  family_overlap <- !is.na(family_data_keys) & family_data_keys %in% family_bv_keys
+  # Print failure diagnostics even when verbose = FALSE.
+  if (isTRUE(verbose) || !any(usable_all)) {
+    message(sprintf(
+      "Screening counts: total=%d; finite_BLUP=%d; finite_trait=%d; assigned_group=%d; family_match=%d; retained=%d",
+      nrow(Data_Total), sum(usable_blup), sum(usable_trait),
+      sum(usable_group), sum(family_overlap), sum(usable_all)
+    ))
+    message(sprintf(
+      "Overlaps: BLUP_and_trait=%d; BLUP_and_group=%d; trait_and_group=%d",
+      sum(usable_blup & usable_trait), sum(usable_blup & usable_group),
+      sum(usable_trait & usable_group)
+    ))
+    message("Group counts: ", paste(
+      capture.output(print(table(Data_Total$Group, useNA = "ifany"))),
+      collapse = " "
+    ))
+    if (!is.null(Tree_BV)) {
+      matched_ids <- !is.na(Data_Total$.tree_id) &
+        Data_Total$.tree_id %in% tb$.tree_id
+      message(sprintf(
+        "TreeID join: matched=%d/%d; finite_joined_BLUP=%d",
+        sum(matched_ids), nrow(Data_Total), sum(usable_blup)
+      ))
+      if (any(!matched_ids)) {
+        message("Example unmatched TreeIDs: ", paste(
+          utils::head(unique(Data_Total$.tree_id[!matched_ids]), 5L),
+          collapse = ", "
+        ))
+      }
+    }
+    if (any(!family_overlap)) {
+      message("Example unmatched families: ", paste(
+        utils::head(unique(family_data_keys[!family_overlap]), 5L),
+        collapse = ", "
+      ))
+    }
+  }
+  if (!any(usable_all)) {
+    stop(sprintf(
+      paste0("No usable individual records. total=%d; finite_BLUP=%d; ",
+             "finite_trait=%d; assigned_group=%d; family_match=%d; ",
+             "BLUP_and_trait=%d; BLUP_and_group=%d. ",
+             "Review TreeID, family/progenie keys, BLUP and MAI columns."),
+      nrow(Data_Total), sum(usable_blup), sum(usable_trait),
+      sum(usable_group), sum(family_overlap),
+      sum(usable_blup & usable_trait), sum(usable_blup & usable_group)
+    ))
+  }
+  Data_Total <- Data_Total[usable_all, , drop = FALSE]
   if (!is.numeric(Data_Total[[blup_col]])) stop("BLUP must be numeric.")
   if (anyDuplicated(as.character(Data_Total[[id]])))
     stop("Individual IDs must be unique.")
