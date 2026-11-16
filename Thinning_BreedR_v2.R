@@ -471,29 +471,29 @@ Thinning_BreedR <- function(BV_Column = "a_total",
     
     # G1
     if (nGroups == 2) {
-      Data_Total[family_group_key %in% family_rank_key[1:Fam_Zero]), "Group"] <-
+      Data_Total[family_group_key %in% family_rank_key[1:Fam_Zero], "Group"] <-
         "G1"
     } else {
-      Data_Total[family_group_key %in% family_rank_key[1:Inflexi_major]), "Group"] <-
+      Data_Total[family_group_key %in% family_rank_key[1:Inflexi_major], "Group"] <-
         "G1"
     }
     
     # G2
     if (nGroups == 2) {
-      Data_Total[family_group_key %in% family_rank_key[(Fam_Zero + 1):nrow(BV_fam)]), "Group"] <-
+      Data_Total[family_group_key %in% family_rank_key[(Fam_Zero + 1):nrow(BV_fam)], "Group"] <-
         "G2"
     } else {
-      Data_Total[family_group_key %in% family_rank_key[(Inflexi_major + 1):Fam_Zero]), "Group"] <-
+      Data_Total[family_group_key %in% family_rank_key[(Inflexi_major + 1):Fam_Zero], "Group"] <-
         "G2"
     }
     
     # G3
     if (nGroups == 3) {
-      Data_Total[family_group_key %in% family_rank_key[(Fam_Zero + 1):nrow(BV_fam)]), "Group"] <-
+      Data_Total[family_group_key %in% family_rank_key[(Fam_Zero + 1):nrow(BV_fam)], "Group"] <-
         "G3"
     } else {
       if (nGroups == 4) {
-        Data_Total[family_group_key %in% family_rank_key[(Fam_Zero + 1):Inflexi_minor]), "Group"] <-
+        Data_Total[family_group_key %in% family_rank_key[(Fam_Zero + 1):Inflexi_minor], "Group"] <-
           "G3"
       }
       
@@ -501,7 +501,7 @@ Thinning_BreedR <- function(BV_Column = "a_total",
     
     # G4
     if (nGroups == 4) {
-      Data_Total[family_group_key %in% family_rank_key[(Inflexi_minor + 1):nrow(BV_fam)]), "Group"] <-
+      Data_Total[family_group_key %in% family_rank_key[(Inflexi_minor + 1):nrow(BV_fam)], "Group"] <-
         "G4"
     }
     
