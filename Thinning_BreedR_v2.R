@@ -50,7 +50,7 @@
 #' @param Tree_BV_Column Individual BLUP column in Tree_BV.
 #' @param target_NE Numeric vector of requested effective population sizes; NULL disables the filter.
 #' @param target_NE_tol Absolute Ne tolerance, either a scalar or one value per target.
-#' @param n_best_strategies Maximum number of retained strategies per Ne target.
+#' @param n_best_strategies Maximum TOTAL number of retained strategies, regardless of targets.
 #' @param max_candidates Maximum number of BW combinations screened.
 #' @param all_scenarios Logical. If TRUE, exhaustively evaluate and retain every BW/BI scenario, ignoring target_NE, max_candidates, and n_best_strategies. Use rebuild_selected = FALSE to avoid retaining all individual records.
 #' @param rebuild_selected Logical. If TRUE, rebuild full records; if FALSE, return compact TreeID/family/group/BLUP records for retained strategies.
@@ -59,6 +59,10 @@
 #'   A scalar applies to all groups; a vector supplies group-specific minima.
 #'   Default is one family in G1 and zero in the remaining groups.
 #' @param min_group_trees Minimum TOTAL selected trees in each group.
+#' @param max_trees_per_family Maximum trees per represented family per group,
+#'   scalar or length-nGroups vector; NULL means unlimited. Applied in BW/BI selection.
+#' @param gs_ne_weights Two positive/zero GS and Ne weights used to rank feasible
+#'   scenarios by normalized distance from the ideal point; default c(0.5, 0.5).
 #' @param min_trees_per_family Minimum trees contributed by EACH selected family,
 #'   by group. Zero disables this restriction for that group; a family may be
 #'   entirely unselected. The threshold applies to nonzero family contributions.
@@ -141,6 +145,8 @@ Thinning_BreedR <- function(BV_Column = "a_total",
                             min_group_families = NULL,
                             min_group_trees = NULL,
                             min_trees_per_family = NULL,
+                            max_trees_per_family = NULL,
+                            gs_ne_weights = c(0.5, 0.5),
                             group_priority = "presence",
                             max_selected_trees = NULL,
                             pareto = TRUE,
@@ -548,8 +554,13 @@ Thinning_BreedR <- function(BV_Column = "a_total",
   }
   if (length(all_scenarios) != 1L || is.na(all_scenarios) || !is.logical(all_scenarios))
     stop("all_scenarios must be TRUE or FALSE.")
-  if (n_best_strategies < 1 || max_candidates < 1)
-    stop("n_best_strategies and max_candidates must be positive.")
+  if (length(n_best_strategies) != 1L || !is.numeric(n_best_strategies) ||
+      !is.finite(n_best_strategies) || n_best_strategies < 1 ||
+      n_best_strategies != floor(n_best_strategies) ||
+      length(max_candidates) != 1L || !is.numeric(max_candidates) ||
+      !is.finite(max_candidates) || max_candidates < 1 ||
+      max_candidates != floor(max_candidates))
+    stop("n_best_strategies and max_candidates must be positive integers.")
   n_best_strategies <- as.integer(n_best_strategies)
   max_candidates <- as.integer(max_candidates)
   groups <- paste0("G", seq_len(nGroups))
@@ -567,6 +578,23 @@ Thinning_BreedR <- function(BV_Column = "a_total",
     min_group_trees, rep(0L, nGroups), "min_group_trees")
   min_trees_per_family <- normalize_minima(
     min_trees_per_family, rep(0L, nGroups), "min_trees_per_family")
+  if (is.null(max_trees_per_family))
+    max_trees_per_family <- rep(Inf, nGroups)
+  if (length(max_trees_per_family) == 1L)
+    max_trees_per_family <- rep(max_trees_per_family, nGroups)
+  if (!is.numeric(max_trees_per_family) ||
+      length(max_trees_per_family) != nGroups ||
+      anyNA(max_trees_per_family) || any(max_trees_per_family < 0) ||
+      any(is.finite(max_trees_per_family) &
+          max_trees_per_family != floor(max_trees_per_family)))
+    stop("max_trees_per_family must be nonnegative whole numbers or Inf.")
+  if (any(min_trees_per_family > max_trees_per_family))
+    stop("Family-level minimum exceeds maximum.")
+  if (!is.numeric(gs_ne_weights) || length(gs_ne_weights) != 2L ||
+      any(!is.finite(gs_ne_weights)) || any(gs_ne_weights < 0) ||
+      sum(gs_ne_weights) <= 0)
+    stop("gs_ne_weights must have two nonnegative finite values with positive sum.")
+  gs_ne_weights <- gs_ne_weights / sum(gs_ne_weights)
   if (!is.character(group_priority) || length(group_priority) != 1L ||
       is.na(group_priority) ||
       !group_priority %in% c("none", "presence", "nonincreasing"))
@@ -638,12 +666,6 @@ Thinning_BreedR <- function(BV_Column = "a_total",
     }
     z
   }
-  select_bw <- function(combo) {
-    unlist(lapply(seq_len(nGroups), function(k) {
-      if (!combo[k]) return(integer())
-      unlist(lapply(cells[[k]], utils::head, n = combo[k]), use.names = FALSE)
-    }), use.names = FALSE)
-  }
   # In exhaustive mode no Ne filter is applied, and all scenario summaries are kept.
   if (all_scenarios) {
     if (!is.null(target_NE)) message("all_scenarios = TRUE: target_NE filtering is disabled.")
@@ -670,6 +692,8 @@ Thinning_BreedR <- function(BV_Column = "a_total",
     message("Group priority mode: ", group_priority,
             "; per-family minimum: ",
             paste(min_trees_per_family, collapse = ", "),
+            "; per-family maximum: ",
+            paste(max_trees_per_family, collapse = ", "),
             "; maximum trees per strategy: ",
             if (is.null(max_selected_trees)) "unlimited"
             else max_selected_trees)
@@ -679,21 +703,39 @@ Thinning_BreedR <- function(BV_Column = "a_total",
   group_sum <- vector("list", nGroups)
   group_tree_count <- vector("list", nGroups)
   group_fam_count <- vector("list", nGroups)
+  group_selected <- vector("list", nGroups)
   for (k in seq_len(nGroups)) {
     cnt <- matrix(0L, nrow = nf, ncol = nlevels)
     sm <- matrix(0, nrow = nf, ncol = nlevels)
-    for (cell in cells[[k]]) {
-      if (!length(cell)) next
-      fam <- fam_index[cell[1L]]
-      running <- c(0, cumsum(blups[cell]))
-      take <- pmin(length(cell), levels_n)
-      cnt[fam, ] <- cnt[fam, ] + take
-      sm[fam, ] <- sm[fam, ] + running[take + 1L]
+    choices <- vector("list", nlevels)
+    for (h in seq_len(nlevels)) {
+      level <- levels_n[h]
+      ix <- if (level == 0L) integer() else
+        unlist(lapply(cells[[k]], utils::head, n = level),
+               use.names = FALSE)
+      if (length(ix) && is.finite(max_trees_per_family[k])) {
+        ix <- ix[order(-blups[ix], as.character(Data_Total[[id]][ix]))]
+        f <- fam_index[ix]
+        rank_in_family <- ave(seq_along(ix), f, FUN = seq_along)
+        ix <- ix[rank_in_family <= max_trees_per_family[k]]
+      }
+      choices[[h]] <- ix
+      if (length(ix)) {
+        cnt[, h] <- tabulate(fam_index[ix], nbins = nf)
+        sums <- rowsum(blups[ix], fam_index[ix], reorder = FALSE)
+        sm[as.integer(rownames(sums)), h] <- as.numeric(sums[, 1L])
+      }
     }
+    group_selected[[k]] <- choices
     group_count[[k]] <- cnt
     group_sum[[k]] <- sm
     group_tree_count[[k]] <- colSums(cnt)
     group_fam_count[[k]] <- colSums(cnt > 0L)
+  }
+  select_bw <- function(combo) {
+    lev <- match(combo, levels_n)
+    unlist(lapply(seq_len(nGroups),
+      function(k) group_selected[[k]][[lev[k]]]), use.names = FALSE)
   }
   # Apply all hard constraints before evaluating genetic gain or Ne.
   # Family minima are enforced for each represented family, not as a
@@ -713,7 +755,8 @@ Thinning_BreedR <- function(BV_Column = "a_total",
       return(FALSE)
     selected <- which(counts > 0L)
     if (length(selected) &&
-        any(counts[selected] < min_trees_per_family[family_group[selected]]))
+        (any(counts[selected] < min_trees_per_family[family_group[selected]]) ||
+         any(counts[selected] > max_trees_per_family[family_group[selected]])))
       return(FALSE)
     TRUE
   }
@@ -829,10 +872,23 @@ Thinning_BreedR <- function(BV_Column = "a_total",
       any(is_vec <= 0 | is_vec > 1)) {
     stop("IS must be selection proportions in (0, 1].")
   }
-  order_bi <- order(-blups, as.character(Data_Total[[id]]))
+  order_bi_raw <- order(-blups, as.character(Data_Total[[id]]))
+  if (any(is.finite(max_trees_per_family))) {
+    used <- integer(nf)
+    accept <- logical(length(order_bi_raw))
+    for (j in seq_along(order_bi_raw)) {
+      fam <- fam_index[order_bi_raw[j]]
+      if (used[fam] < max_trees_per_family[family_group[fam]]) {
+        used[fam] <- used[fam] + 1L
+        accept[j] <- TRUE
+      }
+    }
+    order_bi <- order_bi_raw[accept]
+  } else order_bi <- order_bi_raw
   blup_cumulative <- c(0, cumsum(blups[order_bi]))
   for (i in seq_along(is_vec)) {
-    ns <- max(1L, min(nrow(Data_Total), round(nrow(Data_Total) * is_vec[i])))
+    ns <- max(1L, round(nrow(Data_Total) * is_vec[i]))
+    if (ns > length(order_bi)) next
     counts <- tabulate(fam_index[order_bi[seq_len(ns)]], nbins = nf)
     gindex <- match(Data_Total$Group[order_bi[seq_len(ns)]], groups)
     gtrees <- tabulate(gindex, nbins = nGroups)
@@ -867,44 +923,45 @@ Thinning_BreedR <- function(BV_Column = "a_total",
     screened <- screened[order(-screened$GS_absolute,
                                screened$NE_Distance,
                                screened$Candidate_ID), , drop = FALSE]
-    # Identify Pareto-efficient candidates in O(n log n), maximizing both
-    # individual BLUP gain and family-based effective population size.
-    # Equal objective values are equivalent; keep ties on the same front.
-    pareto_order <- order(-screened$GS_absolute, -screened$NE,
-                          screened$Candidate_ID)
+    # Pareto rank among feasible candidates, with GS/Ne compromise score.
+    ord <- order(-screened$GS_absolute, -screened$NE,
+                 screened$Candidate_ID)
     front <- logical(nrow(screened))
-    best_ne <- -Inf
-    best_gs <- Inf
-    for (j in pareto_order) {
-      gs <- screened$GS_absolute[j]
-      ne <- screened$NE[j]
-      dominated <- ne < best_ne || (ne == best_ne && gs < best_gs)
-      front[j] <- !dominated
-      if (ne > best_ne) best_ne <- ne
-      if (gs < best_gs) best_gs <- gs
+    max_ne <- -Inf
+    prev_gs <- Inf
+    for (j in ord) {
+      front[j] <- !(screened$NE[j] < max_ne ||
+                    (screened$NE[j] == max_ne &&
+                     screened$GS_absolute[j] < prev_gs))
+      max_ne <- max(max_ne, screened$NE[j])
+      prev_gs <- screened$GS_absolute[j]
     }
     screened$Pareto <- front
-    screened <- screened[order(!screened$Pareto,
-                                -screened$GS_absolute,
-                                -screened$NE,
-                                screened$Candidate_ID), , drop = FALSE]
+    scale01 <- function(x) {
+      lim <- range(x)
+      if (diff(lim) == 0) return(rep(1, length(x)))
+      (x - lim[1L]) / diff(lim)
+    }
+    zgs <- scale01(screened$GS_absolute)
+    zne <- scale01(screened$NE)
+    screened$Balance_Score <- 1 - sqrt(
+      gs_ne_weights[1L] * (1 - zgs)^2 +
+      gs_ne_weights[2L] * (1 - zne)^2)
+    screened <- screened[order(
+      if (pareto) !screened$Pareto else rep(FALSE, nrow(screened)),
+      -screened$Balance_Score, -screened$GS_absolute,
+      -screened$NE, screened$Candidate_ID), , drop = FALSE]
     if (!all_scenarios) {
-      # Preserve both BW and BI when feasible; fill remaining slots by
-      # Pareto precedence, then absolute gain, within each Ne target.
-      choose <- function(z) {
-        if (!pareto) z <- z[order(-z$GS_absolute, -z$NE), , drop = FALSE]
-        keep <- integer()
+      # Apply one global result cap, including multiple Ne targets.
+      priority <- integer()
+      if (n_best_strategies >= 2L) {
         for (kind in c("BW", "BI")) {
-          ix <- which(z$Strategy == kind)
-          if (length(ix)) keep <- c(keep, ix[1L])
+          ix <- which(screened$Strategy == kind)
+          if (length(ix)) priority <- c(priority, ix[1L])
         }
-        keep <- unique(c(keep, seq_len(nrow(z))))
-        z[utils::head(keep, max(n_best_strategies, min(2L, nrow(z)))),
-          , drop = FALSE]
       }
-      if (is.null(target_NE)) screened <- choose(screened)
-      else screened <- dplyr::bind_rows(lapply(unique(screened$Target_NE),
-        function(x) choose(screened[screened$Target_NE == x, , drop = FALSE])))
+      priority <- unique(c(priority, seq_len(nrow(screened))))
+      screened <- screened[head(priority, n_best_strategies), , drop = FALSE]
     }
   }
   if (!nrow(screened)) {
@@ -928,8 +985,7 @@ Thinning_BreedR <- function(BV_Column = "a_total",
       select_bw(decode(as.double(sub("BW_", "", candidate))))
     } else {
       j <- as.integer(sub("BI_", "", candidate))
-      n <- max(1L, min(nrow(Data_Total),
-                     round(nrow(Data_Total) * is_vec[j])))
+      n <- max(1L, round(nrow(Data_Total) * is_vec[j]))
       order_bi[seq_len(n)]
     }
     if (isTRUE(rebuild_selected)) {
