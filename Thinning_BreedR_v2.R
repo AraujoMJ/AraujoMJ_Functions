@@ -568,7 +568,8 @@ Thinning_BreedR <- function(BV_Column = "a_total",
   if (!Trait %in% names(Data_Total)) stop("Trait not found in Data_Total.")
   Data_Total$Family <- as.character(Data_Total[[Family_Data_Total]])
   if (!is.null(Tree_BV)) {
-    if (!all(c(TreeID_Column, Tree_BV_Column) %in% names(Tree_BV)) ||
+    if (!TreeID_Column_BV %in% names(Tree_BV) ||
+        !Tree_BV_Column %in% names(Tree_BV) ||
         !TreeID_Column %in% names(Data_Total)) stop("Invalid Tree_BV columns.")
     tb <- Tree_BV[, c(TreeID_Column_BV, Tree_BV_Column), drop = FALSE]
     names(tb) <- c(".tree_id", ".individual_blup")
@@ -581,10 +582,41 @@ Thinning_BreedR <- function(BV_Column = "a_total",
     warning("Tree_BV missing: falling back to BV_Column (family value if merged).")
     blup_col <- BV_Column
   }
-  Data_Total <- Data_Total[!is.na(Data_Total[[blup_col]]) &
-                           !is.na(Data_Total[[Trait]]) &
-                           !is.na(Data_Total$Group), , drop = FALSE]
-  if (!nrow(Data_Total)) stop("No usable individual records.")
+  # Diagnose each exclusion separately before filtering the data.
+  # This distinguishes unmatched tree BLUPs, missing trait values, and missing groups.
+  usable_blup <- is.finite(Data_Total[[blup_col]])
+  usable_trait <- is.finite(Data_Total[[Trait]])
+  usable_group <- !is.na(Data_Total$Group) & Data_Total$Group %in% paste0("G", seq_len(nGroups))
+  usable_all <- usable_blup & usable_trait & usable_group
+  if (isTRUE(verbose) || !any(usable_all)) {
+    message(sprintf(
+      "Individual screening: total=%d, valid_BLUP=%d, valid_trait=%d, assigned_group=%d, retained=%d",
+      nrow(Data_Total), sum(usable_blup), sum(usable_trait),
+      sum(usable_group), sum(usable_all)
+    ))
+    if (!is.null(Tree_BV)) {
+      message(sprintf(
+        "TreeID matching: matched=%d of %d; unique_Data_Total_IDs=%d; unique_Tree_BV_IDs=%d",
+        sum(Data_Total$.tree_id %in% tb$.tree_id),
+        nrow(Data_Total),
+        length(unique(Data_Total$.tree_id)),
+        length(unique(tb$.tree_id))
+      ))
+    }
+  }
+  if (!any(usable_all)) {
+    missing_ids <- if (!is.null(Tree_BV)) {
+      utils::head(unique(Data_Total$.tree_id[!Data_Total$.tree_id %in% tb$.tree_id]), 5L)
+    } else character()
+    stop(paste0(
+      "No usable individual records after filtering. ",
+      "Check TreeID matching, numeric individual BLUP values, MAI observations, ",
+      "and assigned family groups. ",
+      if (length(missing_ids)) paste0("Example unmatched TreeIDs: ",
+                                     paste(missing_ids, collapse = ", ")) else ""
+    ))
+  }
+  Data_Total <- Data_Total[usable_all, , drop = FALSE]
   if (!is.numeric(Data_Total[[blup_col]])) stop("BLUP must be numeric.")
   if (anyDuplicated(as.character(Data_Total[[id]])))
     stop("Individual IDs must be unique.")
