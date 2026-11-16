@@ -8,6 +8,10 @@
 #' @param BV_Column Name of the column containing additive genetic values (default = "a_total").
 #' @param Trait Name of the trait of interest.
 #' @param BV_fam Data frame containing genetic values per family.
+#' @param BV_fam_full Optional unfiltered family breeding-value data for computing
+#'   inflection boundaries and G1..Gn across the entire population. If NULL,
+#'   BV_fam is used, and it must itself be unfiltered for global groups.
+#'   Filtering Data_Total does not affect the ranking or group boundaries.
 #' @param Data_Total Data frame with complete individual data.
 #' @param Family_Data_Total Name of the family column in `Data_Total`.
 #' @param Bloc_Column Name of the experimental block column.
@@ -112,7 +116,8 @@ Thinning_BreedR <- function(BV_Column = "a_total",
                             min_group_families = NULL,
                             min_group_trees = NULL,
                             pareto = TRUE,
-                            bw_selection_unit = "auto") {
+                            bw_selection_unit = "auto",
+                            BV_fam_full = NULL) {
   if (verbose) {
     message("Starting Thinning_BreedR function...")
   }
@@ -133,6 +138,18 @@ Thinning_BreedR <- function(BV_Column = "a_total",
     stop("finfl_value should be a vector of lenght 2 of: 'max' or 'min'")
   }
   
+  # Compute global group definitions from complete family predictions before
+  # filtering individuals by experiment, type, trait or available tree BLUPs.
+  # Data_Total may already be filtered by the calling code: it only defines
+  # the eligible population for BW/BI screening, not family-group boundaries.
+  if (!is.null(BV_fam_full)) {
+    if (!is.data.frame(BV_fam_full)) stop("BV_fam_full must be a data frame.")
+    BV_fam <- BV_fam_full
+    if (verbose) message("Using unfiltered BV_fam_full for global ranking and groups.")
+  } else if (verbose) {
+    message("Using BV_fam for ranking: provide unfiltered family values here, ",
+            "or pass BV_fam_full, to prevent filter-dependent boundaries.")
+  }
   # Start of main function logic
   tryCatch({
     # Process BV_fam data frame
@@ -140,10 +157,16 @@ Thinning_BreedR <- function(BV_Column = "a_total",
       message("Processing BV_fam data frame...")
     }
     
+    if (!all(c(Family_Column, BV_Column) %in% names(BV_fam)))
+      stop("The global family table must contain Family_Column and BV_Column.")
     BV_fam <- BV_fam |>
-      rename_with(~ "Family", all_of(Family_Column)) |> 
-      arrange(desc(get(BV_Column))) |>
-      mutate(Family = factor(Family, levels = Family))
+      rename_with(~ "Family", all_of(Family_Column)) |>
+      mutate(Family = trimws(as.character(Family))) |>
+      arrange(desc(.data[[BV_Column]]))
+    if (anyNA(BV_fam$Family) || any(!nzchar(BV_fam$Family)) ||
+        anyDuplicated(BV_fam$Family))
+      stop("Global family identifiers must be unique, nonmissing values.")
+    BV_fam$Family <- factor(BV_fam$Family, levels = BV_fam$Family)
     
     if (verbose) {
       message("BV_fam data frame processed without problem.")
@@ -163,18 +186,15 @@ Thinning_BreedR <- function(BV_Column = "a_total",
       message("Merging Data_Total and BV_fam...")
     }
     
-    Data_Total <- Data_Total |> 
-      mutate(
-        Family = get(Family_Data_Total)
-      ) |> 
-      left_join(
-        BV_fam |> 
-          dplyr::select(
-            Family,
-            BV_Column
-          ),
-        by = "Family"
-      )
+    if (!Family_Data_Total %in% names(Data_Total))
+      stop("Family_Data_Total column is missing from Data_Total.")
+    Data_Total$Family <- trimws(as.character(Data_Total[[Family_Data_Total]]))
+    # Avoid a stale family BV column or a duplicate BV.x/BV.y pair.
+    if (BV_Column %in% names(Data_Total))
+      Data_Total[[BV_Column]] <- NULL
+    family_lookup <- BV_fam[, c("Family", BV_Column), drop = FALSE]
+    family_lookup$Family <- as.character(family_lookup$Family)
+    Data_Total <- dplyr::left_join(Data_Total, family_lookup, by = "Family")
     
     if (verbose) {
       message("Data merged successfully.")
@@ -263,6 +283,8 @@ Thinning_BreedR <- function(BV_Column = "a_total",
     stop("No family identifiers overlap between Data_Total and BV_fam.")
   Data_Total$Group <- rank_group[family_index]
   if (isTRUE(verbose)) {
+    message("Global family groups constructed before individual-level eligibility filters.")
+    message("Global families: ", n_family, "; eligible input trees: ", nrow(Data_Total))
     message("Inflection candidates (positive): ",
             paste(major_candidates, collapse = ", "))
     message("Inflection candidates (negative, local ranks): ",
@@ -348,7 +370,7 @@ Thinning_BreedR <- function(BV_Column = "a_total",
                                      "Tree_BV_Column")
   }
   if (!Trait %in% names(Data_Total)) stop("Trait not found in Data_Total.")
-  Data_Total$Family <- as.character(Data_Total[[Family_Data_Total]])
+  Data_Total$Family <- trimws(as.character(Data_Total[[Family_Data_Total]]))
   if (!is.null(Tree_BV)) {
     if (!TreeID_Column_BV %in% names(Tree_BV) ||
         !Tree_BV_Column %in% names(Tree_BV) ||
