@@ -614,9 +614,18 @@ Thinning_BreedR <- function(BV_Column = "a_total",
       length(bw_selection_unit) != 1L ||
       !bw_selection_unit %in% c("auto", "plot", "family"))
     stop("bw_selection_unit must be 'auto', 'plot', or 'family'.")
+  # A family cannot satisfy its minimum if fewer eligible individuals exist.
+  # Exclude it from candidate construction, rather than repeatedly selecting
+  # partial families and rejecting their candidates at the final check.
+  family_available <- table(Data_Total$Family)
+  family_eligible <- as.integer(family_available[Data_Total$Family]) >=
+    min_trees_per_family[match(Data_Total$Group, groups)] &
+    max_trees_per_family[match(Data_Total$Group, groups)] > 0
+  if (verbose) message("Trees in families eligible for family-level quotas: ",
+                       sum(family_eligible), "/", nrow(Data_Total))
   make_cells <- function(unit) {
     z <- lapply(groups, function(g) {
-      ix <- which(Data_Total$Group == g)
+      ix <- which(Data_Total$Group == g & family_eligible)
       if (!length(ix)) return(list())
       key <- if (unit == "family") Data_Total$Family[ix] else
         interaction(Data_Total$Family[ix], Data_Total$Plot[ix], drop = TRUE)
@@ -681,8 +690,17 @@ Thinning_BreedR <- function(BV_Column = "a_total",
     Data_Total$Group[match(family_levels, Data_Total$Family)], groups)
   if (anyNA(family_group)) stop("One or more families have no valid group.")
   blups <- Data_Total[[blup_col]]
-  eligible_by_group <- tabulate(match(Data_Total$Group, groups),
-                                nbins = nGroups)
+  eligible_by_group <- tabulate(
+    match(Data_Total$Group[family_eligible], groups), nbins = nGroups)
+  available_families_by_group <- vapply(seq_len(nGroups), function(k) {
+    length(unique(Data_Total$Family[
+      family_eligible & Data_Total$Group == groups[k]]))
+  }, integer(1))
+  if (verbose) message("Eligible families by group: ",
+                       paste(available_families_by_group, collapse = ", "))
+  if (any(min_group_families > available_families_by_group))
+    warning("Some groups have fewer eligible families than the required ",
+            "min_group_families. No feasible strategy is possible.")
   if (any(min_group_trees > eligible_by_group))
     warning("Some min_group_trees exceed the number of eligible trees in ",
             "their groups: no strategy can satisfy the current constraints.")
@@ -797,38 +815,89 @@ Thinning_BreedR <- function(BV_Column = "a_total",
       check.names = FALSE
     )
   }
-  # Use deterministic exhaustive screening for small search spaces.
+  # Restrict each group's BW levels *before* drawing combinations.
+  # This avoids spending the entire search budget on obviously impossible
+  # configurations (for example G5 forced to zero, or too few G2 families).
+  group_levels <- lapply(seq_len(nGroups), function(k) {
+    which(vapply(seq_len(nlevels), function(h) {
+      if (group_tree_count[[k]][h] < min_group_trees[k] ||
+          group_fam_count[[k]][h] < min_group_families[k])
+        return(FALSE)
+      cnt <- group_count[[k]][, h]
+      active <- cnt > 0L
+      !any(active &
+           (cnt < min_trees_per_family[k] |
+            cnt > max_trees_per_family[k]))
+    }, logical(1)))
+  })
+  if (verbose) message("Admissible BW levels per group: ",
+                       paste(lengths(group_levels), collapse = ", "))
+  if (any(lengths(group_levels) == 0L))
+    warning("At least one group has no BW level satisfying its family ",
+            "and group constraints. Consider smaller minima or family mode.")
+
+  # Enumerate the reduced space when small. Otherwise sample from allowed
+  # levels, not from the entire unconstrained Cartesian space.
+  encode_level_indices <- function(indices) {
+    sum((as.double(indices) - 1) * base_n^(seq_len(nGroups) - 1L))
+  }
+  reduced_total <- prod(as.double(lengths(group_levels)))
+  candidate_budget <- if (all_scenarios) Inf else max_candidates
   if (all_scenarios && total > .Machine$integer.max)
-    stop("Exhaustive search exceeds supported integer indexing; restrict seq_combinations or nGroups.")
-  ncheck <- as.integer(if (all_scenarios) total else min(total, max_candidates))
-  if (!all_scenarios && total > max_candidates) {
-    warning("Bounded candidate search: global Pareto optimality is not guaranteed.")
-    # Uniformly sample combination codes, preserving the global RNG state.
-    old_seed_exists <- exists(".Random.seed", envir = .GlobalEnv, inherits = FALSE)
-    if (old_seed_exists) old_seed <- get(".Random.seed", envir = .GlobalEnv)
+    stop("Exhaustive search exceeds supported integer indexing.")
+  if (all_scenarios) {
+    codes <- seq_len(as.integer(total))
+  } else if (reduced_total == 0) {
+    codes <- numeric()
+  } else {
+    rng_exists <- exists(".Random.seed", envir = .GlobalEnv,
+                         inherits = FALSE)
+    if (rng_exists) saved_rng <- get(".Random.seed", envir = .GlobalEnv)
     on.exit({
-      if (old_seed_exists) assign(".Random.seed", old_seed, envir = .GlobalEnv)
-      else if (exists(".Random.seed", envir = .GlobalEnv, inherits = FALSE))
-        rm(".Random.seed", envir = .GlobalEnv)
+      if (rng_exists) assign(".Random.seed", saved_rng, envir = .GlobalEnv)
+      else if (exists(".Random.seed", envir = .GlobalEnv,
+                      inherits = FALSE)) rm(".Random.seed", envir = .GlobalEnv)
     }, add = TRUE)
     set.seed(seed)
-    if (total <= .Machine$integer.max) {
-      codes <- sample.int(as.integer(total), ncheck, replace = FALSE)
+    max_attempts <- min(200000L, max(5000L, max_candidates * 100L))
+    if (reduced_total <= max_attempts) {
+      choices <- expand.grid(group_levels, KEEP.OUT.ATTRS = FALSE,
+                             stringsAsFactors = FALSE)
+      ord <- sample.int(nrow(choices))
+      proposals <- lapply(seq_len(nrow(choices)), function(j)
+        as.integer(choices[ord[j], ]))
     } else {
-      codes <- unique(floor(stats::runif(ncheck * 3L, 1, total + 1)))
-      codes <- utils::head(codes, ncheck)
+      proposals <- lapply(seq_len(max_attempts), function(j)
+        vapply(group_levels, function(opts)
+          sample(opts, size = 1L), integer(1)))
     }
-    # Add a deterministic candidate with G1 represented to protect coverage.
-    if (min_group_families[1L] > 0L || min_group_trees[1L] > 0L) {
-      positive <- which(levels_n > 0L)
-      if (length(positive)) {
-        anchor <- as.double(positive[1L] - 1L)
-        codes <- unique(c(anchor, codes))
-        codes <- utils::head(codes, ncheck)
-      }
+    visited <- new.env(hash = TRUE, parent = emptyenv())
+    codes <- numeric()
+    for (idx in proposals) {
+      code <- encode_level_indices(idx)
+      if (code == 0) next
+      key <- as.character(code)
+      if (exists(key, envir = visited, inherits = FALSE)) next
+      assign(key, TRUE, envir = visited)
+      count <- integer(nf)
+      for (k in seq_len(nGroups))
+        count <- count + group_count[[k]][, idx[k]]
+      gt <- vapply(seq_len(nGroups),
+        function(k) group_tree_count[[k]][idx[k]], numeric(1))
+      gf <- vapply(seq_len(nGroups),
+        function(k) group_fam_count[[k]][idx[k]], numeric(1))
+      if (!feasible_contributions(count, gt, gf)) next
+      # Limit the feasible candidate pool, not the random attempts.
+      codes <- c(codes, code)
+      if (length(codes) >= candidate_budget) break
     }
-  } else {
-    codes <- seq_len(ncheck)
+    if (verbose) message("Feasible BW proposals: ", length(codes),
+                         "; reduced search space: ", reduced_total,
+                         "; explored unique proposals: ", length(ls(visited)))
+    if (length(codes) < max_candidates)
+      warning("Only ", length(codes), " feasible BW candidates found in ",
+              "the constrained search. Increase max_candidates or adjust ",
+              "per-family minimums if additional solutions are needed.")
   }
   rows <- vector("list", length(codes) +
                    length(if (is.null(IS)) c(seq(.01,.50,by=.01),seq(.55,1,by=.05)) else IS))
@@ -873,6 +942,7 @@ Thinning_BreedR <- function(BV_Column = "a_total",
     stop("IS must be selection proportions in (0, 1].")
   }
   order_bi_raw <- order(-blups, as.character(Data_Total[[id]]))
+  order_bi_raw <- order_bi_raw[family_eligible[order_bi_raw]]
   if (any(is.finite(max_trees_per_family))) {
     used <- integer(nf)
     accept <- logical(length(order_bi_raw))
