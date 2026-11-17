@@ -869,7 +869,7 @@ Thinning_BreedR <- function(BV_Column = "a_total",
     } else {
       proposals <- lapply(seq_len(max_attempts), function(j)
         vapply(group_levels, function(opts)
-          sample(opts, size = 1L), integer(1)))
+          opts[sample.int(length(opts), size = 1L)], integer(1)))
     }
     visited <- new.env(hash = TRUE, parent = emptyenv())
     codes <- numeric()
